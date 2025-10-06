@@ -14,16 +14,11 @@ void TrianglePolygon::Init(RootSignature& rs)
 }
 void TrianglePolygon::Draw(RenderContext& rc)
 {
-	//パイプラインステートを設定。
 	rc.SetPipelineState(m_pipelineState);
-	//プリミティブのトポロジーを設定。
 	rc.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	//頂点バッファを設定。
 	rc.SetVertexBuffer(m_vertexBuffer);
-	//インデックスバッファを設定。
 	rc.SetIndexBuffer(m_indexBuffer);
-	//ドローコール
-	rc.DrawIndexed(3);
+	rc.DrawIndexed(6); // インデックス数を6に変更
 }
 void TrianglePolygon::LoadShaders()
 {
@@ -64,24 +59,30 @@ void TrianglePolygon::InitPipelineState(RootSignature& rs)
 }
 void TrianglePolygon::InitVertexBuffer()
 {
-	m_vertices[0] = {
-			{-0.5f, -0.5f, 0.0f},
-			{ 1.0f, 0.0f, 0.0f },
-			{ 0.0f, 0.0f }
-	};
-	m_vertices[1] = {
-			{ 0.0f, 0.5f, 0.0f },
-			{ 0.0f, 1.0f, 0.0f },
-			{ 0.5f, 1.0f }
-	};
-	m_vertices[2] = {
-			{ 0.5f, -0.5f, 0.0f },
-			{ 0.0f, 0.0f, 1.0f },
-			{1.0f, 0.0f}
-	};
+    // 4頂点分定義
+    m_vertices[0] = {
+        { -0.5f,  0.5f, 0.0f }, // 左上
+        { 1.0f, 1.0f, 1.0f },
+        { 0.0f, 1.0f }
+    };
+    m_vertices[1] = {
+        { -0.5f, -0.5f, 0.0f }, // 左下
+        { 0.0f, 1.0f, 0.0f },
+        { 0.0f, 0.0f }
+    };
+    m_vertices[2] = {
+        { 0.5f, -0.5f, 0.0f }, // 右下
+        { 1.0f, 0.0f, 1.0f },
+        { 1.0f, 0.0f }
+    };
+    m_vertices[3] = {
+        { 0.5f,  0.5f, 0.0f }, // 右上
+        { 0.0f, 1.0f, 1.0f },
+        { 1.0f, 1.0f }
+    };
 
-	m_vertexBuffer.Init(sizeof(m_vertices), sizeof(m_vertices[0]));
-	m_vertexBuffer.Copy(m_vertices);
+    m_vertexBuffer.Init(sizeof(m_vertices), sizeof(m_vertices[0]));
+    m_vertexBuffer.Copy(m_vertices);
 }
 
 void TrianglePolygon::SetUVCoord(int vertNo, float U, float V)
@@ -92,11 +93,12 @@ void TrianglePolygon::SetUVCoord(int vertNo, float U, float V)
 }
 void TrianglePolygon::InitIndexBuffer()
 {
-	unsigned short indices[] = {
-		0,1,2
-	};
-	
-	m_indexBuffer.Init(sizeof(indices), 2);
-	m_indexBuffer.Copy(static_cast<uint16_t*>(indices));
+    // 2枚の三角形で矩形を構成
+    unsigned short indices[] = {
+        0, 1, 2, // 左下三角形
+        0, 2, 3  // 右上三角形
+    };
 
+    m_indexBuffer.Init(sizeof(indices), 2);
+    m_indexBuffer.Copy(static_cast<uint16_t*>(indices));
 }

@@ -13,7 +13,7 @@ struct VSOutput
 };
 
 // step-6 レジスタb0のデータにアクセスするための変数を定義する
-
+float4x4 g_worldMatrix : register(b0);
 // 頂点シェーダー
 // 1. 引数は変換前の頂点情報
 // 2. 戻り値は変換後の頂点情報
@@ -22,7 +22,8 @@ VSOutput VSMain(VSInput In)
     VSOutput vsOut = (VSOutput)0;
 
     // step-7 ワールド行列と座標を乗算して座標変換を行う
-    vsOut.pos = In.pos;
+    vsOut.pos = mul(g_worldMatrix, In.pos);
+    //vsOut.pos = In.pos;
     vsOut.color = In.color; //
     return vsOut;
 }
@@ -30,5 +31,6 @@ VSOutput VSMain(VSInput In)
 // ピクセルシェーダー
 float4 PSMain(VSOutput vsOut) : SV_Target0
 {
-    return float4(1.0f, 0.0f , 0.0f, 1.0f);
+    //return float4(1.0f, 0.0f , 0.0f, 1.0f);
+    return float4(vsOut.color,0.0f);
 }
