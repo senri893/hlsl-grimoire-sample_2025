@@ -36,6 +36,7 @@ cbuffer DirectionLightCb : register(b1)
     float3 ligColor;        // ライトのカラー
 
     // step-3 視点のデータにアクセスするための変数を定数バッファーに追加する
+    float3 eyePos; //視点の位置
 };
 
 ///////////////////////////////////////////
@@ -87,21 +88,29 @@ float4 PSMain(SPSIn psIn) : SV_Target0
     float3 diffuseLig = ligColor * t;
 
     // step-4 反射ベクトルを求める
+    float3 refVec = reflect(ligDirection, psIn.normal);
 
     // step-5 光が当たったサーフェイスから視点に伸びるベクトルを求める
-
+    float toEye = normalize(eyePos - psIn.worldPos);
+    
     // step-6 鏡面反射の強さを求める
-
+    //dot関数を利用してrefVecとtoEyeのない席を求める
+    t = dot(refVec, toEye);
+    
     // step-7 鏡面反射の強さを絞る
-
+    t = pow(t, 1.0f);
+    
     // step-8 鏡面反射光を求める
-
+    float3 specularLig = ligColor * t;
+    
     // step-9 拡散反射光と鏡面反射光を足し算して、最終的な光を求める
-
+    float3 lig = diffuseLig + specularLig * 2.0f;
+    
     // テクスチャからカラーをフェッチする
     float4 finalColor = g_texture.Sample(g_sampler, psIn.uv);
 
     // step-10 テクスチャカラーに求めた光を乗算して最終出力カラーを求める
-
+    finalColor.rgb *= lig;
+    
     return finalColor;
 }

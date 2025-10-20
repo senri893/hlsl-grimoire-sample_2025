@@ -2,7 +2,15 @@
 #include "system/system.h"
 
 // step-1 ディレクションライト用の構造体を定義する
+struct DirectionLight 
+{
+    Vector3 ligDirection; //ライトの方向
 
+    //HLSL側の定数バッファであるfloat3型の変数は16の倍数のアドレスに配置されるため、C++側にはパディングを埋めておく
+    float pad; //パディング
+
+    Vector3 ligColor; //ライトのカラー
+};
 ///////////////////////////////////////////////////////////////////
 // ウィンドウプログラムのメイン関数
 ///////////////////////////////////////////////////////////////////
@@ -19,9 +27,31 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     g_camera3D->SetTarget({ 0.0f, 0.0f, 0.0f });
 
     // step-2 ディレクションライトのデータを作成する
+    DirectionLight directionLig;
+
+    //ライトは斜め上からあたる
+    directionLig.ligDirection = { -1.0f, -1.0f, -1.0f };
+    directionLig.ligDirection.Normalize();
+
+    //ライトの色は灰色
+    directionLig.ligColor = { 0.5f,0.5f,0.5f };
 
     // step-3 モデルを初期化する
+     // モデルを初期化するための情報を構築する
+    ModelInitData modelInitData;
+    modelInitData.m_tkmFilePath = "Assets/modelData/teapot.tkm";
 
+    // 使用するシェーダーファイルパスを設定する
+    modelInitData.m_fxFilePath = "Assets/shader/sample.fx";
+
+    // ディレクションライトの情報をディスクリプタヒープに定数バッファーとして
+    // 登録するためにモデルの初期化情報として渡す
+    modelInitData.m_expandConstantBuffer = &directionLig;
+    modelInitData.m_expandConstantBufferSize = sizeof(directionLig);
+
+    // 初期化情報を使ってモデルを初期化する
+    Model model;
+    model.Init(modelInitData);
     //////////////////////////////////////
     // 初期化を行うコードを書くのはここまで！！！
     //////////////////////////////////////
@@ -37,6 +67,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
         //////////////////////////////////////
 
         // step-4 モデルをドローする
+        model.Draw(renderContext);
 
         //////////////////////////////////////
         // 絵を描くコードを書くのはここまで！！！

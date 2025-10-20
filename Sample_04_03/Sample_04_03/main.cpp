@@ -9,6 +9,7 @@ struct DirectionLight
     float pad1;
 
     // step-1 構造体に視点の位置を追加する
+    Vector3 eyePos; //視点の位置
 };
 
 ///////////////////////////////////////////////////////////////////
@@ -41,6 +42,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     directionLig.ligColor.z = 0.5f;
 
     // step-2 視点の位置を設定する
+    directionLig.eyePos = g_camera3D->GetPosition();
 
     // モデルを初期化する
     // モデルを初期化するための情報を構築する
