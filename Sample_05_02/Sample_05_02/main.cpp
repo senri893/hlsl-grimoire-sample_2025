@@ -19,6 +19,12 @@ struct Light
     float ptRange;          // 影響範囲
 
     // step-1 ライト構造体にスポットライト用のメンバ変数を追加
+    Vector3 spPosition;     // 位置
+    float pad3;             // パディング
+    Vector3 spColor;        // カラー
+    float spRange;          // 影響範囲
+    Vector3 spDirection;    // 射出方向
+    float spAngle;          // 射出角度
 
     Vector3 eyePos;         // 視点の位置
     float pad4;
@@ -58,6 +64,23 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     InitAmbientLight(light);
 
     // step-2 スポットライトのデータを初期化する
+    //初期座標はX＝0,Y=50,Z=0にする
+    light.spPosition = {0.0f,50.0f,0.0f};
+
+    //ライトカラーの設定。R＝10、G＝10、B=10にする
+    light.spColor = {10.0f,10.0f,10.0f};
+
+    //初期方向は斜め下にする
+    light.spDirection = {1.0f,-1.0f,1.0f};
+
+    //方向データなので大きさを１にする必要があるので正規化する
+    light.spDirection.Normalize();
+
+    //影響範囲を設定する
+    light.spRange = 300.0f;
+
+    //照射角度を設定する(ラジアン)
+    light.spAngle = Math::DegToRad(25.0f);
 
     // モデルを初期化する
     // モデルを初期化するための情報を構築する
@@ -69,9 +92,12 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     //////////////////////////////////////
     auto& renderContext = g_graphicsEngine->GetRenderContext();
 
+    float f = 0.0f;
+    Quaternion q = g_quatIdentity;
     // ここからゲームループ
     while (DispatchWindowMessage())
     {
+        f += 0.1f;
         // レンダリング開始
         g_engine->BeginFrame();
         //////////////////////////////////////
@@ -79,14 +105,51 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
         //////////////////////////////////////
 
         // step-3 コントローラー左スティックでスポットライトを移動させる
+        //左のアナログスティックで動かす
+        light.spPosition.x -= g_pad[0]->GetRStickXF();
+        if (g_pad[0]->IsPress(enButtonB))
+        {
+            //Bボタンが一緒に押されていたらY軸方向に動かす
+            light.spPosition.y += g_pad[0]->GetLStickYF();
+        }
+        else 
+        {
+            //Bボタンが押されていなかったらZ軸方向に動かす
+            light.spPosition.z -= g_pad[0]->GetLStickYF();
 
+        }
         // step-4 コントローラー右スティックでスポットライトを回転させる
-		
+        Quaternion qRotY;
+        qRotY.SetRotationY(g_pad[0]->GetRStickXF() * 0.01f);
+
+        //ライトの方向ベクトルをQuaternionで回転させる
+        qRotY.Apply(light.spDirection);
+
+        //X軸回りの回転クォータニオンを計算する
+        Vector3 rotAxis;
+        rotAxis.Cross(g_vec3AxisY, light.spDirection);
+        Quaternion qRotX;
+        qRotX.SetRotation(rotAxis, g_pad[0]->GetRStickYF() * 0.01f);
+
+        //計算したクォータニオンでライトの方向回す
+        qRotX.Apply(light.spDirection);
+
+        //スポットライトモデルの回転クォータニオンを求める
+        Quaternion qRot;
+        qRot.SetRotation({ 0.0f,0.0f,-1.0f }, light.spDirection);
+
+        //スポットライトモデルのワールド行列を更新する
+        lightModel.UpdateWorldMatrix(light.spPosition, qRot, g_vec3One);
+
+        q.SetRotationDegY(f * 10);
+        teapotModel.UpdateWorldMatrix(Vector3(0, 15.0f, 0), q, Vector3(1, 1, 1));
         // 背景モデルをドロー
         bgModel.Draw(renderContext);
 
         // スポットライトモデルをドロー
         lightModel.Draw(renderContext);
+
+        teapotModel.Draw(renderContext);
 
         //////////////////////////////////////
         // 絵を描くコードを書くのはここまで！！！
