@@ -18,6 +18,12 @@ struct Light
     float pad3;
 
     // step-1 地面色と天球色、地面の法線を追加する
+    Vector3 groundColor; //地面色
+    float pad4;
+    Vector3 skyColor; //天球色
+    float pad5;
+    Vector3 groundNormal; //地面の法線
+
 };
 
 //////////////////////////////////////
@@ -53,6 +59,14 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     InitAmbientLight(light);
 
     // step-2 地面色、天球色、地面の法線のデータを設定する
+    //地面色を設定
+    light.groundColor = { 0.7f,0.5f,0.3f };
+
+    //天球色
+    light.skyColor = { 0.1f,0.7f,0.95f };
+
+    //地面の法線を設定
+    light.groundNormal = {0.0f,1.0f,0.1f};
 
     // モデルを初期化する
     // モデルを初期化するための情報を構築する
