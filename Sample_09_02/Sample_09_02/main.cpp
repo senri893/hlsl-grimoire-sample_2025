@@ -25,8 +25,21 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     //////////////////////////////////////
 
     // step-1 ワイプパラメータ構造体を定義する
+    struct WipeParam {
+        Vector2 wipeDir;    //【注目】ワイプする方向
+        float wipeSize;     //ワイプサイズ
+    };
 
     // step-2 ワイプパラメータを初期化する
+    WipeParam wipeParam;
+
+    // ワイプする方向を設定する
+  // 今回は右下に向かってワイプする
+    wipeParam.wipeDir.Set(1.0f, 1.0f);
+    wipeParam.wipeDir.Normalize();
+
+    // ワイプサイズを初期化する
+    wipeParam.wipeSize = 0.0f;
 
     // まずはSpriteクラスの初期化オブジェクトを作成する
     SpriteInitData spriteInitData;
