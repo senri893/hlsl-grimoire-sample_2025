@@ -147,8 +147,40 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     luminanceSprite.Init( luminanceSpriteInitData );
 
     // step-1 ガウシアンブラーを初期化
+    GaussianBlur gaussianBlur[4];
+    // gaussianBlur[0]は輝度テクスチャにガウシアンブラーをかける
+    gaussianBlur[0].Init(&luminnceRenderTarget.GetRenderTargetTexture());
+    // gaussianBlur[1]はgaussianBlur[0]のテクスチャにガウシアンブラーをかける
+    gaussianBlur[1].Init(&gaussianBlur[0].GetBokeTexture());
+    // gaussianBlur[2]はgaussianBlur[1]のテクスチャにガウシアンブラーをかける
+    gaussianBlur[2].Init(&gaussianBlur[1].GetBokeTexture());
+    // gaussianBlur[3]はgaussianBlur[2]のテクスチャにガウシアンブラーをかける
+    gaussianBlur[3].Init(&gaussianBlur[2].GetBokeTexture());
 
     // step-2 ボケ画像を合成して書き込むためのスプライトを初期化
+     // 初期化情報を設定する
+    SpriteInitData finalSpriteInitData;
+    // ボケテクスチャを4枚指定する
+    finalSpriteInitData.m_textures[0] = &gaussianBlur[0].GetBokeTexture();
+    finalSpriteInitData.m_textures[1] = &gaussianBlur[1].GetBokeTexture();
+    finalSpriteInitData.m_textures[2] = &gaussianBlur[2].GetBokeTexture();
+    finalSpriteInitData.m_textures[3] = &gaussianBlur[3].GetBokeTexture();
+    // 解像度はmainRenderTargetの幅と高さ
+    finalSpriteInitData.m_width = 1280;
+    finalSpriteInitData.m_height = 720;
+    // ぼかした画像を、通常の2Dとしてメインレンダリングターゲットに描画するので、
+    // 2D用のシェーダーを使用する
+    finalSpriteInitData.m_fxFilePath = "Assets/shader/samplePostEffect.fx";
+    finalSpriteInitData.m_psEntryPoinFunc = "PSBloomFinal";
+
+    // ただし、加算合成で描画するので、アルファブレンディングモードを加算にする
+    finalSpriteInitData.m_alphaBlendMode = AlphaBlendMode_Add;
+    // カラーバッファーのフォーマットは例によって、32ビット浮動小数点バッファー
+    finalSpriteInitData.m_colorBufferFormat[0] = DXGI_FORMAT_R32G32B32A32_FLOAT;
+
+    // 初期化情報を元に加算合成用のスプライトを初期化する
+    Sprite finalSprite;
+    finalSprite.Init(finalSpriteInitData);
 
     // mainRenderTargetのテクスチャをフレームバッファーに貼り付けるためのスプライトを初期化する
     // スプライトの初期化オブジェクトを作成する
@@ -212,8 +244,20 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
         renderContext.WaitUntilFinishDrawingToRenderTarget(luminnceRenderTarget);
 
         // step-3 ガウシアンブラーを4回実行する
+        gaussianBlur[0].ExecuteOnGPU(renderContext, 10);
+        gaussianBlur[1].ExecuteOnGPU(renderContext, 10);
+        gaussianBlur[2].ExecuteOnGPU(renderContext, 10);
+        gaussianBlur[3].ExecuteOnGPU(renderContext, 10);
 
         // step-4 ボケ画像を合成してメインレンダリングターゲットに加算合成
+        // レンダリングターゲットとして利用できるまで待つ
+        renderContext.WaitUntilToPossibleSetRenderTarget(mainRenderTarget);
+        // レンダリングターゲットを設定
+        renderContext.SetRenderTargetAndViewport(mainRenderTarget);
+        // 最終合成
+        finalSprite.Draw(renderContext);
+        // レンダリングターゲットへの書き込み終了待ち
+        renderContext.WaitUntilFinishDrawingToRenderTarget(mainRenderTarget);
 
         // メインレンダリングターゲットの絵をフレームバッファーにコピー
         renderContext.SetRenderTarget(

@@ -10,7 +10,7 @@ cbuffer cb : register(b0)
 
 cbuffer NagaCB : register( b1 )
 {
-    float negaRate;         // ネガポジ反転率
+    float2 negaRate;         // ネガポジ反転率
 };
 
 struct VSInput
@@ -41,6 +41,17 @@ float4 PSMain(PSInput In) : SV_Target0
     float4 color = colorTexture.Sample(Sampler, In.uv);
 
     // step-1 画像を徐々にネガポジ反転させていく
+    //float3 negaColor;
+    //negaColor.x = 1.0f - color.x;
+    //negaColor.y = 1.0f - color.y;
+    //negaColor.z = 1.0f - color.z;
+    float3 negaColor = float3(1.0f, 1.0f, 1.0f) - color.rgb;
+    float4 negaposiColor;
+    if(In.uv.x < negaRate.y)
+        
 
+    // ネガポジ率を使って徐々にネガポジ画像にしていく
+    color.xyz = lerp(color.rgb, negaColor, negaRate);
+    
     return color;
 }

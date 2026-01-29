@@ -54,9 +54,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     //////////////////////////////////////
     auto& renderContext = g_graphicsEngine->GetRenderContext();
 
+    float frameCount;
     // ここからゲームループ
     while (DispatchWindowMessage())
     {
+        frameCount++;
         // 1フレームの開始
         g_engine->BeginFrame();
 
@@ -64,13 +66,22 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
         // ここから絵を描くコードを記述する
         //////////////////////////////////////
         // ワイプサイズを増やして少しずつワイプさせる
-        monochromeRate += 0.01f;
-        if (monochromeRate > 1.0f) {
-            monochromeRate = 1.0f;
+
+        
+        if (monochromeRate < 1.0f) 
+        {
+            monochromeRate += 0.01f;
+        }
+        else if (monochromeRate > 1.0f)
+        {
+            monochromeRate -= 0.01f;
         }
         // スプライトのドローコールを実行する
         test2D.Draw(renderContext);
 
+        
+
+        
         //////////////////////////////////////
         // 絵を描くコードを書くのはここまで！！！
         //////////////////////////////////////
@@ -78,6 +89,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
         g_engine->EndFrame();
     }
     return 0;
+
 }
 
 // ルートシグネチャの初期化
