@@ -54,11 +54,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     //////////////////////////////////////
     auto& renderContext = g_graphicsEngine->GetRenderContext();
 
-    float frameCount;
+    float frameCount = 0;
     // ここからゲームループ
     while (DispatchWindowMessage())
     {
-        frameCount++;
+        //frameCount++;
         // 1フレームの開始
         g_engine->BeginFrame();
 

@@ -41,16 +41,68 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     // 頂点配列を定義
     SimpleVertex vertices[] = {
         {
-            {-0.5f, -0.5f, 0.0f},
-            { 1.0f, 0.0f, 0.0f }
+            {-0.5f, -0.5f, 0.0f}, //左下0
+            { 1.0f, 0.0f, 0.0f } //赤
         },
         {
-            { 0.0f, 0.5f, 0.0f },
-            { 0.0f, 1.0f, 0.0f }
+            {-0.5f, 0.5f, 0.0f}, //左上1
+            { 1.0f, 0.0f, 0.0f } //赤
         },
         {
-            { 0.5f, -0.5f, 0.0f },
-            { 0.0f, 0.0f, 1.0f }
+            { 0.5f, 0.5f, 0.0f },//右上2
+            { 0.0f, 0.0f, 1.0f } //緑
+        },
+        {
+            { 0.5f, -0.5f, 0.0f },//右下3
+            { 0.0f, 0.0f, 1.0f }  //青
+        },
+        {
+            { -0.4f, -0.4f, 0.0f }, //左下4
+            { 1.0f, 0.0f, 0.0f } //赤
+        },
+        {
+            {-0.4f, 0.4f, 0.0f}, //左上5
+            { 1.0f, 0.0f, 0.0f } //赤
+        },
+        {
+            { 0.4f, 0.4f, 0.0f },//右上6
+            { 1.0f, 0.0f, 0.0f } //赤
+        },
+        {
+            { 0.4f, -0.4f, 0.0f },//右下7
+            { 1.0f, 0.0f, 0.0f }  //赤
+        },
+        {
+            { -0.3f, -0.3f, 0.0f }, //左下8
+            { 0.0f, 0.0f, 1.0f } //青
+        },
+        {
+            {-0.3f, 0.3f, 0.0f}, //左上9
+            { 0.0f, 0.0f, 1.0f } //青
+        },
+        {
+            { 0.3f, 0.3f, 0.0f },//右上10
+            { 0.0f, 0.0f, 1.0f } //青
+        },
+        {
+            { 0.3f, -0.3f, 0.0f },//右下11
+            { 0.0f, 0.0f, 1.0f }  //青
+        },
+        {
+            {0.0f,1.0f,0.0f},//gokakkei
+            {1.0f,0.0f,0.0f}
+        },
+        {
+            {0.0f,-0.1f,0.0f},//ueshiro
+            {1.0f,1.0f,1.0f}
+        },
+        {
+            {0.2f,-0.3f,0.0f},//migiaka
+            {1.0f,0.0f,0.0f}
+        },
+        {
+            {-0.2f,-0.3f,0.0f},//hidarishiro
+            {0.0f,0.0f,1.0f}
         }
     };
 
@@ -61,7 +113,14 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     // 5. 三角形のインデックスバッファを作成
     //インデックス配列
     uint16_t indices[] = {
-        0,1,2
+        0,1,2, //三角形1 ◤
+        0,2,3,  //三角形2 ◢
+        4,5,6,
+        4,6,7,
+        8,9,10,
+        8,10,11,
+        1,2,12,
+        13,14,15
     };
     IndexBuffer triangleIB;
     triangleIB.Init(sizeof(indices), 2);
@@ -93,7 +152,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
         // 5. インデックスバッファを設定
         renderContext.SetIndexBuffer(triangleIB);
         // 6. ドローコール
-        renderContext.DrawIndexed(3);
+        renderContext.DrawIndexed(24);
 
         /// //////////////////////////////////////
         // 絵を描くコードを書くのはここまで！！！
