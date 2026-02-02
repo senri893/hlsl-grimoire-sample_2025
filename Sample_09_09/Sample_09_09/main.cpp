@@ -1,5 +1,7 @@
 ﻿#include "stdafx.h"
 #include "system/system.h"
+#include <chrono>
+#include <cmath>
 
 // 頂点構造体
 struct SimpleVertex
@@ -55,10 +57,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     auto& renderContext = g_graphicsEngine->GetRenderContext();
 
     float frameCount = 0;
+
     // ここからゲームループ
     while (DispatchWindowMessage())
     {
-        //frameCount++;
+        
         // 1フレームの開始
         g_engine->BeginFrame();
 
@@ -67,19 +70,20 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
         //////////////////////////////////////
         // ワイプサイズを増やして少しずつワイプさせる
 
-        
-        if (monochromeRate < 1.0f) 
-        {
-            monochromeRate += 0.01f;
-        }
-        else if (monochromeRate > 1.0f)
-        {
-            monochromeRate -= 0.01f;
-        }
+        static auto startTime = std::chrono::high_resolution_clock::now();
+
+        auto now = std::chrono::high_resolution_clock::now();
+        float time = std::chrono::duration<float>(now - startTime).count();
+
+        // 点滅
+        monochromeRate = fmod(time, 1.0f) < 0.5f ? 1.0f : 0.0f;
+
+        //徐々に
+        //monochromeRate = (sinf(time) + 1.0f) * 0.5f;
+       
         // スプライトのドローコールを実行する
         test2D.Draw(renderContext);
 
-        
 
         
         //////////////////////////////////////

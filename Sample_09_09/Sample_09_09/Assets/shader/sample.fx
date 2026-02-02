@@ -4,25 +4,25 @@
 
 cbuffer cb : register(b0)
 {
-    float4x4 mvp;           // MVP行列
-    float4 mulColor;        // 乗算カラー
+    float4x4 mvp; // MVP行列
+    float4 mulColor; // 乗算カラー
 };
 
-cbuffer NagaCB : register( b1 )
+cbuffer NagaCB : register(b1)
 {
-    float2 negaRate;         // ネガポジ反転率
+    float monochromeRate; // ネガポジ反転率
 };
 
 struct VSInput
 {
     float4 pos : POSITION;
-    float2 uv  : TEXCOORD0;
+    float2 uv : TEXCOORD0;
 };
 
 struct PSInput
 {
     float4 pos : SV_POSITION;
-    float2 uv  : TEXCOORD0;
+    float2 uv : TEXCOORD0;
 };
 
 Texture2D<float4> colorTexture : register(t0); // カラーテクスチャ
@@ -40,18 +40,30 @@ float4 PSMain(PSInput In) : SV_Target0
 {
     float4 color = colorTexture.Sample(Sampler, In.uv);
 
-    // step-1 画像を徐々にネガポジ反転させていく
-    //float3 negaColor;
-    //negaColor.x = 1.0f - color.x;
-    //negaColor.y = 1.0f - color.y;
-    //negaColor.z = 1.0f - color.z;
-    float3 negaColor = float3(1.0f, 1.0f, 1.0f) - color.rgb;
-    float4 negaposiColor;
-    if(In.uv.x < negaRate.y)
-        
+    // =====================
+    // グレースケール作成
+    // =====================
+    float gray = dot(color.rgb, float3(0.299, 0.587, 0.114));
+    float3 grayColor = float3(gray, gray, gray);
 
-    // ネガポジ率を使って徐々にネガポジ画像にしていく
-    color.xyz = lerp(color.rgb, negaColor, negaRate);
-    
-    return color;
+    // =====================
+    // チェッカーワイプ
+    // =====================
+    float2 uv = In.uv * 20.0; // マスの細かさ
+
+    int cx = (int) floor(uv.x);
+    int cy = (int) floor(uv.y);
+
+    float checker = (cx + cy) & 1;
+
+    // negaRate をワイプ進行率として使う
+    float mask = step(checker, monochromeRate);
+
+    // =====================
+    // 元 → グレー
+    // =====================
+    float3 result = lerp(color.rgb, grayColor, mask);
+
+    return float4(result, color.a);
 }
+
