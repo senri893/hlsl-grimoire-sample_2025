@@ -31,6 +31,22 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     bgModelRender.InitDeferredRendering(renderingEngine, "Assets/modelData/bg/bg.tkm", true);
 
     // step-1 ティーポットの描画処理を初期化する
+    myRenderer::ModelInitDataFR modelInitData;
+    modelInitData.m_tkmFilePath = "Assets/modelData/teapot.tkm";
+    modelInitData.m_fxFilePath = "Assets/shader/sample.fx";
+
+    // 拡張SRVにZPrepassで作成された深度テクスチャを指定する
+    modelInitData.m_expandShaderResoruceView[0] = &renderingEngine.GetZPrepassDepthTexture();
+
+    // 初期化情報を使って描画処理を初期化する
+    myRenderer::ModelRender teapotModelRender;
+
+    // InitForwardRendering()を利用すると、
+    // フォワードレンダリングの描画パスで描画される
+    teapotModelRender.InitForwardRendering(renderingEngine, modelInitData);
+
+    //シャドウキャスターフラグをオンにする
+    teapotModelRender.SetShadowCasterFlag(true);
 
     teapotModelRender.UpdateWorldMatrix({ 0.0f, 50.0f, 0.0f }, g_quatIdentity, g_vec3One);
 
@@ -55,6 +71,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
         bgModelRender.Draw();
 
         // step-2 ティーポットを描画する
+        teapotModelRender.Draw();
 
         //レンダリングエンジンを実行
         renderingEngine.Execute(renderContext);
@@ -73,7 +90,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
 void InitRootSignature(RootSignature& rs)
 {
     rs.Init(D3D12_FILTER_MIN_MAG_MIP_LINEAR,
-            D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-            D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-            D3D12_TEXTURE_ADDRESS_MODE_WRAP);
+        D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+        D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+        D3D12_TEXTURE_ADDRESS_MODE_WRAP);
 }

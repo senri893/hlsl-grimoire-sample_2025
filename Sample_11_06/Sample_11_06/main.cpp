@@ -34,12 +34,53 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     float clearColor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
 
     // step-1 シャドウマップの枚数を定数で定義する
+    const int NUM_SHADOW_MAP = 3;
 
     // step-2 ライトビュープロジェクションクロップ行列の配列を定義する
+    Matrix lvpcMatrix[NUM_SHADOW_MAP];
 
-    // step-3 シャドウマップを書き込むレンダリングターゲットを3枚用意する
+    // step-3 シャドウマップを書き込むレンダリングターゲットを３枚用意する
+    RenderTarget shadowMaps[NUM_SHADOW_MAP];
+
+    // 近影用のシャドウマップ
+    shadowMaps[0].Create(
+        2048,
+        2048,
+        1,
+        1,
+        DXGI_FORMAT_R32_FLOAT,
+        DXGI_FORMAT_D32_FLOAT,
+        clearColor
+    );
+
+    // 中影用のシャドウマップ
+    shadowMaps[1].Create(
+        1024,
+        1024,
+        1,
+        1,
+        DXGI_FORMAT_R32_FLOAT,
+        DXGI_FORMAT_D32_FLOAT,
+        clearColor
+    );
+
+    // 遠影用のシャドウマップ
+    shadowMaps[2].Create(
+        512,
+        512,
+        1,
+        1,
+        DXGI_FORMAT_R32_FLOAT,
+        DXGI_FORMAT_D32_FLOAT,
+        clearColor
+    );
 
     // step-4 分割エリアの最大深度値を定義する
+    float cascadeAreaTbl[NUM_SHADOW_MAP] = {
+        500,                    // 近影を映す最大深度値
+        2000,                   // 中影を映す最大深度値
+        g_camera3D->GetFar(),   // 遠影を映す最大深度値。最大深度はカメラのFarクリップ
+    };
 
     // 影を落とすモデルを初期化する
     Model testShadowModel[NUM_SHADOW_MAP];
@@ -52,6 +93,23 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     teapotModel.Init("Assets/modelData/testModel.tkm");
 
     // step-5 影を受ける背景モデルを初期化
+    ModelInitData bgModelInitData;
+
+    // シャドウレシーバー（影が落とされるモデル）用のシェーダーを指定する
+    bgModelInitData.m_fxFilePath = "Assets/shader/sampleShadowReciever.fx";
+
+    // 【注目】シャドウマップを拡張SRVに設定する
+    bgModelInitData.m_expandShaderResoruceView[0] = &shadowMaps[0].GetRenderTargetTexture();
+    bgModelInitData.m_expandShaderResoruceView[1] = &shadowMaps[1].GetRenderTargetTexture();
+    bgModelInitData.m_expandShaderResoruceView[2] = &shadowMaps[2].GetRenderTargetTexture();
+
+    // 【注目】ライトビュープロジェクションクロップ行列を拡張定数バッファーに設定する
+    bgModelInitData.m_expandConstantBuffer = (void*)lvpcMatrix;
+    bgModelInitData.m_expandConstantBufferSize = sizeof(lvpcMatrix);
+    bgModelInitData.m_tkmFilePath = "Assets/modelData/bg/bg.tkm";
+
+    Model bgModel;
+    bgModel.Init(bgModelInitData);
 
     //////////////////////////////////////
     // 初期化を行うコードを書くのはここまで！！！
@@ -74,21 +132,101 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
         const auto& lvpMatrix = lightCamera.GetViewProjectionMatrix();
 
         // step-6 カメラの前方向、右方向、上方向を求める
+        // 前方向と右方向はすでに計算済みなので、それを引っ張ってくる
+        const auto& cameraForward = g_camera3D->GetForward();
+        const auto& cameraRight = g_camera3D->GetRight();
+
+        // カメラの上方向は前方向と右方向の外積で求める
+        Vector3 cameraUp;
+        cameraUp.Cross(cameraForward, cameraRight);
 
         // nearDepthはエリアの最小深度値を表す
         // 一番近いエリアの最小深度値はカメラのニアクリップ
         float nearDepth = g_camera3D->GetNear();
         for (int areaNo = 0; areaNo < NUM_SHADOW_MAP; areaNo++)
         {
-            // step-7 エリアを内包する視錐台の8頂点を求める
+            // step-7 エリアを内包する視錐台の８頂点を求める
+            // エリアの近平面の中心からの上面、下面までの距離を求める
+            float nearY = tanf(g_camera3D->GetViewAngle() * 0.5f) * nearDepth;
+
+            // エリアの近平面の中心からの右面、左面までの距離を求める
+            float nearX = nearY * g_camera3D->GetAspect();
+
+            // エリアの遠平面の中心からの上面、下面までの距離を求める
+            float farY = tanf(g_camera3D->GetViewAngle() * 0.5f) * cascadeAreaTbl[areaNo];
+
+            // エリアの遠平面の中心からの右面、左面までの距離を求める
+            float farX = farY * g_camera3D->GetAspect();
+
+            // エリアの近平面の中心座標を求める
+            Vector3 nearPos = g_camera3D->GetPosition() + cameraForward * nearDepth;
+
+            // エリアの遠平面の中心座標を求める
+            Vector3 farPos = g_camera3D->GetPosition() + cameraForward * cascadeAreaTbl[areaNo];
+
+            // 8頂点を求める
+            Vector3 vertex[8];
+
+            // 近平面の右上の頂点
+            vertex[0] += nearPos + cameraUp * nearY + cameraRight * nearX;
+
+            // 近平面の左上の頂点
+            vertex[1] += nearPos + cameraUp * nearY + cameraRight * -nearX;
+
+            // 近平面の右下の頂点
+            vertex[2] += nearPos + cameraUp * -nearY + cameraRight * nearX;
+
+            // 近平面の左下の頂点
+            vertex[3] += nearPos + cameraUp * -nearY + cameraRight * -nearX;
+
+            // 遠平面の右上の頂点
+            vertex[4] += farPos + cameraUp * farY + cameraRight * farX;
+
+            // 遠平面の左上の頂点
+            vertex[5] += farPos + cameraUp * farY + cameraRight * -farX;
+
+            // 遠平面の右下の頂点
+            vertex[6] += farPos + cameraUp * -farY + cameraRight * farX;
+
+            // 遠平面の左下の頂点
+            vertex[7] += farPos + cameraUp * -farY + cameraRight * -farX;
 
             // step-8 8頂点を変換して最大値、最小値を求める
+            Vector3 vMax, vMin;
+            vMax = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
+            vMin = { FLT_MAX,  FLT_MAX,  FLT_MAX };
+            for (auto& v : vertex)
+            {
+                lvpMatrix.Apply(v);
+                vMax.Max(v);
+                vMin.Min(v);
+            }
 
             // step-9 クロップ行列を求める
+            float xScale = 2.0f / (vMax.x - vMin.x);
+            float yScale = 2.0f / (vMax.y - vMin.y);
+            float xOffset = (vMax.x + vMin.x) * -0.5f * xScale;
+            float yOffset = (vMax.y + vMin.y) * -0.5f * yScale;
+            Matrix clopMatrix;
+            clopMatrix.m[0][0] = xScale;
+            clopMatrix.m[1][1] = yScale;
+            clopMatrix.m[3][0] = xOffset;
+            clopMatrix.m[3][1] = yOffset;
 
             // step-10 ライトビュープロジェクション行列にクロップ行列を乗算する
+            lvpcMatrix[areaNo] = lvpMatrix * clopMatrix;
 
             // step-11 シャドウマップにレンダリング
+            // レンダリングターゲットをシャドウマップに変更する
+            renderContext.WaitUntilToPossibleSetRenderTarget(shadowMaps[areaNo]);
+            renderContext.SetRenderTargetAndViewport(shadowMaps[areaNo]);
+            renderContext.ClearRenderTargetView(shadowMaps[areaNo]);
+
+            // 影モデルを描画
+            testShadowModel[areaNo].Draw(renderContext, g_matIdentity, lvpcMatrix[areaNo]);
+
+            // 書き込み完了待ち
+            renderContext.WaitUntilFinishDrawingToRenderTarget(shadowMaps[areaNo]);
 
             // 次のエリアの近平面までの距離を代入する
             nearDepth = cascadeAreaTbl[areaNo];
@@ -100,8 +238,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
             g_graphicsEngine->GetCurrentFrameBuffuerRTV(),
             g_graphicsEngine->GetCurrentFrameBuffuerDSV()
         );
-        renderContext.SetViewportAndScissor(
-            g_graphicsEngine->GetFrameBufferViewport());
+        renderContext.SetViewportAndScissor(g_graphicsEngine->GetFrameBufferViewport());
 
         // ティーポットモデルを描画
         teapotModel.Draw(renderContext);
@@ -124,7 +261,7 @@ void InitLightCamera(Camera& lightCamera)
     // ライトまでのベクトル
     Vector3 toLigDir = { 1, 2, 1 };
     toLigDir.Normalize();
-    toLigDir *= 5000.0f;    // ライトまでの距離
+    toLigDir *= 5000.0f; // ライトまでの距離
 
     // カメラの位置を設定。これはライトの位置
     lightCamera.SetPosition(toLigDir);
@@ -146,12 +283,12 @@ void InitLightCamera(Camera& lightCamera)
 }
 
 // ルートシグネチャの初期化
-void InitRootSignature( RootSignature& rs )
+void InitRootSignature(RootSignature& rs)
 {
     rs.Init(D3D12_FILTER_MIN_MAG_MIP_LINEAR,
-            D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-            D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-            D3D12_TEXTURE_ADDRESS_MODE_WRAP);
+        D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+        D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+        D3D12_TEXTURE_ADDRESS_MODE_WRAP);
 }
 
 void MoveCamera()
@@ -187,7 +324,7 @@ void InitShadowReciever(Model& model, Matrix* lvpMatrix, RenderTarget* shadowMap
     // 影を受ける背景モデルを初期化
     ModelInitData bgModelInitData;
 
-    // シャドウレシーバー(影が落とされるモデル)用のシェーダーを指定する
+    // シャドウレシーバー（影が落とされるモデル）用のシェーダーを指定する
     bgModelInitData.m_fxFilePath = "Assets/shader/sampleShadowReciever.fx";
 
     // シャドウマップは、ガウシアンブラーでぼかしたものを利用する

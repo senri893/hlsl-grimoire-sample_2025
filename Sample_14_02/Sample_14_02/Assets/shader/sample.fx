@@ -33,6 +33,7 @@ cbuffer ModelCb : register(b0)
 ///////////////////////////////////////////
 
 // step-3 シーンテクスチャにアクセスするための変数を追加
+Texture2D<float4> g_sceneTexture : register(t10);
 
 ///////////////////////////////////////////
 // サンプラーステート
@@ -77,7 +78,9 @@ SPSIn VSMain(SVSIn vsIn, uniform bool hasSkin)
     psIn.uv = vsIn.uv;
 
     // step-4 頂点の正規化スクリーン座標系の座標をピクセルシェーダーに渡す
-
+    psIn.posInProj = psIn.pos;
+    psIn.posInProj.xy /= psIn.posInProj.w;
+    
     return psIn;
 }
 
@@ -87,5 +90,15 @@ SPSIn VSMain(SVSIn vsIn, uniform bool hasSkin)
 float4 PSMain(SPSIn psIn) : SV_Target0
 {
     // step-5 シンプレックスノイズを利用して、UV座標をずらしてシーンテクスチャを貼り付ける
+     // 正規化スクリーン座標系からUV座標系に変換する
+    float2 uv = psIn.posInProj.xy * float2(0.5f, -0.5f) + 0.5f;
 
+    // シンプレックスノイズを利用して、UVオフセットを計算する
+    float uOffset = SimplexNoise(float3(uv, 0.0f) * 256.0f) * 0.02f;
+
+    // シーンテクスチャからカラーをサンプリング
+    float4 stealth = g_sceneTexture.Sample(g_sampler, uv + uOffset);
+
+    // サンプリングしたカラーを返す
+    return stealth;
 }

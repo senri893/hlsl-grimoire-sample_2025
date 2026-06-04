@@ -60,6 +60,19 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     bgModel.Init(modelInitData);
 
     // step-1 半透明の球体モデルを初期化
+    ModelInitData transModelInitData;
+    transModelInitData.m_tkmFilePath = "Assets/modelData/sphere.tkm";
+    transModelInitData.m_fxFilePath = "Assets/shader/model.fx";
+    // 半透明モデルはモデルを描くときにライティングを行うので、ライトの情報を渡す
+    transModelInitData.m_expandConstantBuffer = &light;
+    transModelInitData.m_expandConstantBufferSize = sizeof(light);
+    // ピクセルシェーダのエントリーポイントが不透明モデルとは異なる
+    // 不透明モデルはPSMain、半透明モデルはPSMainTransを使用する
+    // ピクセルシェーダの実装は後で確認
+    transModelInitData.m_psEntryPointFunc = "PSMainTrans";
+    // 半透明の球体モデルを初期化
+    Model sphereModel;
+    sphereModel.Init(transModelInitData);
 
     Vector3 planePos = { 0.0f, 160.0f, 20.0f };
 
@@ -122,7 +135,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
         {
             planePos.x += 1.0f;
         }
-        if (g_pad[0]->IsPress(enButtonUp) )
+        if (g_pad[0]->IsPress(enButtonUp))
         {
             planePos.z -= 1.0f;
         }
@@ -161,6 +174,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
         defferdLightinSpr.Draw(renderContext);
 
         // step-2 深度ステンシルビューをG-Bufferを作成したときのものに変更する
+        renderContext.SetRenderTarget(g_graphicsEngine->GetCurrentFrameBuffuerRTV(), rts[0]->GetDSVCpuDescriptorHandle());
+        // 半透明オブジェクトを描画！
+        sphereModel.Draw(renderContext);
 
         /////////////////////////////////////////
         // 絵を描くコードを書くのはここまで！！！
