@@ -15,14 +15,14 @@ struct SVertex
 // closesthitシェーダー、missシェーダーに渡される引数構造体
 struct RayPayload
 {
-    float3 color;            // カラー
+    float3 color; // カラー
 };
 
-Texture2D<float4> g_albedoTexture : register(t1);           // アルベドマップ
-StructuredBuffer<SVertex> g_vertexBuffers : register(t6);   // 頂点バッファー
-StructuredBuffer<int> g_indexBuffers : register(t7);        // インデックスバッファー
+Texture2D<float4> g_albedoTexture : register(t1); // アルベドマップ
+StructuredBuffer<SVertex> g_vertexBuffers : register(t6); // 頂点バッファー
+StructuredBuffer<int> g_indexBuffers : register(t7); // インデックスバッファー
 
-SamplerState  g_samplerState : register(s0);                // サンプラーステート
+SamplerState g_samplerState : register(s0); // サンプラーステート
 
 /////////////////////////////////////////////////////////////////
 // レイと最も近い三角形ポリゴンと衝突したときに呼ばれるシェーダー
@@ -31,12 +31,37 @@ SamplerState  g_samplerState : register(s0);                // サンプラー�
 void chs(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes attribs)
 {
     // step-1 衝突したポリゴンの番号からポリゴンを構成する頂点番号を取得する
+    // 衝突したポリゴンの番号を取得
+    uint polygonNo = PrimitiveIndex();
+
+    // ポリゴンを構成する3頂点の番号を取得する
+    uint v0_id = g_indexBuffers[polygonNo * 3];
+    uint v1_id = g_indexBuffers[polygonNo * 3 + 1];
+    uint v2_id = g_indexBuffers[polygonNo * 3 + 2];
 
     // step-2 頂点番号から各頂点のUV座標を取得する
+    float2 uv0 = g_vertexBuffers[v0_id].uv;
+    float2 uv1 = g_vertexBuffers[v1_id].uv;
+    float2 uv2 = g_vertexBuffers[v2_id].uv;
 
     // step-3 各頂点のUV座標と重心座標を使って、衝突点のUV座標を求める
+    // 重心座標を計算する
+    float3 barycentrics;
+    barycentrics.x = 1.0 - attribs.barycentrics.x - attribs.barycentrics.y;
+    barycentrics.y = attribs.barycentrics.x;
+    barycentrics.z = attribs.barycentrics.y;
+
+    // 衝突点のUV座標を求める
+    float2 uv = barycentrics.x * uv0
+              + barycentrics.y * uv1
+              + barycentrics.z * uv2;
 
     // step-4 求めたUV座標を使ってテクスチャカラーをサンプリングする
+    payload.color = g_albedoTexture.SampleLevel(
+        g_samplerState,
+        uv,
+        0.0f
+    );
 
 }
 
@@ -53,20 +78,20 @@ void miss(inout RayPayload payload)
 // 定数バッファーなので16バイトアライメントに気を付けること
 struct Camera
 {
-    float4x4 mCameraRot;    // カメラの回転行列
-    float3 pos;             // カメラ座標
-    float aspect;           // アスペクト比
-    float far;              // 遠平面
-    float near;             // 近平面
+    float4x4 mCameraRot; // カメラの回転行列
+    float3 pos; // カメラ座標
+    float aspect; // アスペクト比
+    float far; // 遠平面
+    float near; // 近平面
 };
 
-cbuffer rayGenCB :register(b0)
+cbuffer rayGenCB : register(b0)
 {
     Camera g_camera; // カメラ
 };
 
-RaytracingAccelerationStructure g_raytracingWorld : register(t0);   // レイトレワールド
-RWTexture2D<float4> gOutput : register(u0);                         // カラー出力先
+RaytracingAccelerationStructure g_raytracingWorld : register(t0); // レイトレワールド
+RWTexture2D<float4> gOutput : register(u0); // カラー出力先
 
 [shader("raygeneration")]
 void rayGen()

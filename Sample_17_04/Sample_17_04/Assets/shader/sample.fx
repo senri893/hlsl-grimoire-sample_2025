@@ -19,20 +19,20 @@ struct SVertex
 // closesthitシェーダー、missシェーダーに渡される引数構造体
 struct RayPayload
 {
-    float3 color;   // カラー
-    int hit;        // 衝突フラグ
+    float3 color; // カラー
+    int hit; // 衝突フラグ
     int reflection; // リフレクションフラグ
 };
 
 /////////////////////////////////////////////////////////////////
 // リソース
 /////////////////////////////////////////////////////////////////
-RaytracingAccelerationStructure g_raytracingWorld : register(t0);   // レイトレワールド
-Texture2D<float4> g_albedoTexture : register(t1);                   // アルベドマップ
-StructuredBuffer<SVertex> g_vertexBuffers : register(t6);           // 頂点バッファー
-StructuredBuffer<int> g_indexBuffers : register(t7);                // インデックスバッファー
+RaytracingAccelerationStructure g_raytracingWorld : register(t0); // レイトレワールド
+Texture2D<float4> g_albedoTexture : register(t1); // アルベドマップ
+StructuredBuffer<SVertex> g_vertexBuffers : register(t6); // 頂点バッファー
+StructuredBuffer<int> g_indexBuffers : register(t7); // インデックスバッファー
 
-SamplerState  g_samplerState : register(s0);                        // サンプラーステート
+SamplerState g_samplerState : register(s0); // サンプラーステート
 
 /////////////////////////////////////////////////////////////////
 // 関数宣言
@@ -60,7 +60,7 @@ void shadowMiss(inout RayPayload payload)
 
 /////////////////////////////////////////////////////////////////
 // レイと最も近い三角形ポリゴンと衝突したときに呼ばれるシェーダー
-// ///////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////
 [shader("closesthit")]
 void chs(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes attribs)
 {
@@ -68,19 +68,62 @@ void chs(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes attr
     float2 uv = GetUV(attribs);
 
     // 求めたUV座標を使ってテクスチャカラーをサンプリングする
-    payload.color = g_albedoTexture.SampleLevel(g_samplerState,uv,0.0f);
+    payload.color = g_albedoTexture.SampleLevel(g_samplerState, uv, 0.0f);
 
     // step-1 カメラレイがポリゴンと衝突した位置を計算する
+    // 1. ぶつかったレイの方向ベクトルを取得
+    float3 rayDirW = WorldRayDirection();
+
+    // 2. レイを飛ばした座標を取得。今回であればカメラの視点
+    float3 rayOriginW = WorldRayOrigin();
+
+    // 3. レイを飛ばした場所から、衝突した点までの距離を取得
+    float hitT = RayTCurrent();
+
+    // 1.、2.、3.の情報から衝突した座標を求める
+    float3 hitPos = rayOriginW + rayDirW * hitT;
 
     // step-2 反射ベクトルを計算する
+    // 法線を取得
+    float3 normal = GetNormal(attribs);
+
+    // reflect関数を利用して反射ベクトルを計算
+    float3 refDir = reflect(rayDirW, normal);
 
     // step-3 レイを作る
+    RayDesc ray;
+
+    // レイの射出位置はカメラレイとポリゴンの衝突点
+    ray.Origin = hitPos;
+
+    // レイの方向は反射ベクトル
+    ray.Direction = refDir;
+    ray.TMin = 0.01f;
+    ray.TMax = 10000;
 
     // step-4 レイを飛ばす
-    if(payload.reflection == 0)
+    if (payload.reflection == 0)
     {
+        // このレイがリフレクションレイでないなら
+        RayPayload reflectionPayload;
+        reflectionPayload.color = 0.0f;
+
+        // このレイはリフレクションレイなのでフラグを立てる
+        reflectionPayload.reflection = 1;
+        TraceRay(
+            g_raytracingWorld,
+            0,
+            0xFF,
+            0, //ヒットグループのオフセット番号が0
+                        //つまり、ポリゴンと衝突するとchs関数が呼ばれる！
+            0,
+            1,
+            ray,
+            reflectionPayload
+        );
 
         // step-5 反射カラーの合成
+        payload.color = payload.color * 0.7f + reflectionPayload.color * 0.3f;
     }
 }
 
@@ -98,14 +141,14 @@ void miss(inout RayPayload payload)
 // 定数バッファーなので16バイトアライメントに気を付けること
 struct Camera
 {
-    float4x4 mCameraRot;    // カメラの回転行列
-    float3 pos;             // カメラ座標
-    float aspect;           // アスペクト比
-    float far;              // 遠平面
-    float near;             // 近平面
+    float4x4 mCameraRot; // カメラの回転行列
+    float3 pos; // カメラ座標
+    float aspect; // アスペクト比
+    float far; // 遠平面
+    float near; // 近平面
 };
 
-cbuffer rayGenCB :register(b0)
+cbuffer rayGenCB : register(b0)
 {
     Camera g_camera; // カメラ
 };
@@ -195,13 +238,13 @@ void TraceShadowRay(inout RayPayload payload)
     // シャドウレイを飛ばす
     payload.hit = 0;
     TraceRay(
-        g_raytracingWorld,  // レイトレワールド
-        0,                  //
+        g_raytracingWorld, // レイトレワールド
+        0, //
         0xFF,
-        1,                  // ヒットグループのオフセット番号
+        1, // ヒットグループのオフセット番号
         0,
-        1,                  // ミスシェーダーの番号
-        ray,                // レイ
+        1, // ミスシェーダーの番号
+        ray, // レイ
         payload
     );
 }

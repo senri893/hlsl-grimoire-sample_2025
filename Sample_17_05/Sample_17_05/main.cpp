@@ -1,6 +1,69 @@
 ﻿#include "stdafx.h"
 #include "system/system.h"
 #include <time.h>
+#include <Windows.h>
+#include <sstream>
+#include <fstream>
+#include "tkFile/TkmFile.h"
+
+// 指定した .tkm ファイルを解析して、マテリアル一覧を返す
+static std::string BuildTkmMaterialList(const std::string& tkmFilePath)
+{
+    std::stringstream ss;
+    TkmFile tkm;
+    tkm.Load(tkmFilePath.c_str());
+    ss << "TKM: " << tkmFilePath << "\n";
+    const auto& meshes = tkm.GetMeshParts();
+    for (size_t mi = 0; mi < meshes.size(); ++mi) {
+        const auto& mesh = meshes[mi];
+        ss << "  Mesh[" << mi << "] materials: " << mesh.materials.size() << "\n";
+        for (size_t matIdx = 0; matIdx < mesh.materials.size(); ++matIdx) {
+            const auto& mat = mesh.materials[matIdx];
+            ss << "    Material[" << matIdx << "]: ";
+            ss << "albedo=" << (mat.albedoMapFileName.empty() ? "(none)" : mat.albedoMapFileName) << ", ";
+            ss << "normal=" << (mat.normalMapFileName.empty() ? "(none)" : mat.normalMapFileName) << ", ";
+            ss << "specular=" << (mat.specularMapFileName.empty() ? "(none)" : mat.specularMapFileName) << ", ";
+            ss << "reflection=" << (mat.reflectionMapFileName.empty() ? "(none)" : mat.reflectionMapFileName) << ", ";
+            ss << "refraction=" << (mat.refractionMapFileName.empty() ? "(none)" : mat.refractionMapFileName) << "\n";
+        }
+    }
+    ss << "\n";
+    return ss.str();
+}
+
+// CSV 向けに値をエスケープして引用符で囲む
+static std::string EscapeCsv(const std::string& v)
+{
+    std::string out = v;
+    // ダブルクォートを2つにする
+    size_t pos = 0;
+    while ((pos = out.find('"', pos)) != std::string::npos) {
+        out.insert(pos, "\"");
+        pos += 2;
+    }
+    return std::string("\"") + out + "\"";
+}
+
+// 指定した .tkm を CSV 形式で返す（ヘッダー含む）
+static std::string BuildTkmMaterialCSV(const std::string& tkmFilePath)
+{
+    std::stringstream ss;
+    ss << "TKM Path,MeshIndex,MaterialIndex,Albedo,Normal,Specular,Reflection,Refraction\n";
+    TkmFile tkm;
+    tkm.Load(tkmFilePath.c_str());
+    const auto& meshes = tkm.GetMeshParts();
+    for (size_t mi = 0; mi < meshes.size(); ++mi) {
+        const auto& mesh = meshes[mi];
+        for (size_t matIdx = 0; matIdx < mesh.materials.size(); ++matIdx) {
+            const auto& mat = mesh.materials[matIdx];
+            ss << EscapeCsv(tkmFilePath) << "," << mi << "," << matIdx << ",";
+            ss << EscapeCsv(mat.albedoMapFileName) << "," << EscapeCsv(mat.normalMapFileName) << ",";
+            ss << EscapeCsv(mat.specularMapFileName) << "," << EscapeCsv(mat.reflectionMapFileName) << ",";
+            ss << EscapeCsv(mat.refractionMapFileName) << "\n";
+        }
+    }
+    return ss.str();
+}
 
 const int NUM_DIRECTIONAL_LIGHT = 4; // ディレクションライトの数
 
@@ -39,7 +102,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     // ゲームの初期化
     InitGame(hInstance, hPrevInstance, lpCmdLine, nCmdShow, TEXT("Game"));
 
-    srand(time(nullptr) );
+    srand(time(nullptr));
     //////////////////////////////////////
     // ここから初期化を行うコードを記述する
     //////////////////////////////////////
@@ -51,10 +114,43 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     initData.m_tkmFilePath = "Assets/modelData/sample.tkm";
     initData.m_fxFilePath = "Assets/shader/NoAnimModel_PBR.fx";
 
+    // materialのリストを出力
+    std::string materialList = BuildTkmMaterialList(initData.m_tkmFilePath);
+    MessageBoxA(nullptr, materialList.c_str(), "TKM Material List", MB_OK);
+    // CSV 出力（カレントパス）
+    {
+        std::string csv = BuildTkmMaterialCSV(initData.m_tkmFilePath);
+        // ファイル名を作成（sample.tkm -> sample_materials.csv）
+        std::string path = initData.m_tkmFilePath;
+        auto pos = path.find_last_of("\\/");
+        std::string fname = (pos == std::string::npos) ? path : path.substr(pos + 1);
+        auto dot = fname.find_last_of('.');
+        std::string base = (dot == std::string::npos) ? fname : fname.substr(0, dot);
+        std::string outName = base + "_materials.csv";
+        std::ofstream ofs(outName, std::ios::binary);
+        if (ofs) ofs << csv;
+    }
+
     model.Init(initData);
 
     initData.m_tkmFilePath = "Assets/modelData/bg/bg.tkm";
     bgModel.Init(initData);
+
+    // materialのリストを出力
+    materialList = BuildTkmMaterialList(initData.m_tkmFilePath);
+    MessageBoxA(nullptr, materialList.c_str(), "TKM Material List", MB_OK);
+    // CSV 出力（カレントパス）
+    {
+        std::string csv = BuildTkmMaterialCSV(initData.m_tkmFilePath);
+        std::string path = initData.m_tkmFilePath;
+        auto pos = path.find_last_of("\\/");
+        std::string fname = (pos == std::string::npos) ? path : path.substr(pos + 1);
+        auto dot = fname.find_last_of('.');
+        std::string base = (dot == std::string::npos) ? fname : fname.substr(0, dot);
+        std::string outName = base + "_materials.csv";
+        std::ofstream ofs(outName, std::ios::binary);
+        if (ofs) ofs << csv;
+    }
 
     //////////////////////////////////////
     // 初期化を行うコードを書くのはここまで！！！
@@ -102,4 +198,3 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     }
     return 0;
 }
-

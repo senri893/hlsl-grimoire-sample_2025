@@ -20,18 +20,18 @@ struct SVertex
 struct RayPayload
 {
     float3 color; // カラー
-    int hit;      // 衝突フラグ
+    int hit; // 衝突フラグ
 };
 
 /////////////////////////////////////////////////////////////////
 // リソース
 /////////////////////////////////////////////////////////////////
-RaytracingAccelerationStructure g_raytracingWorld : register(t0);   // レイトレワールド
-Texture2D<float4> g_albedoTexture : register(t1);                   // アルベドマップ
-StructuredBuffer<SVertex> g_vertexBuffers : register(t6);           // 頂点バッファー
-StructuredBuffer<int> g_indexBuffers : register(t7);                // インデックスバッファー
+RaytracingAccelerationStructure g_raytracingWorld : register(t0); // レイトレワールド
+Texture2D<float4> g_albedoTexture : register(t1); // アルベドマップ
+StructuredBuffer<SVertex> g_vertexBuffers : register(t6); // 頂点バッファー
+StructuredBuffer<int> g_indexBuffers : register(t7); // インデックスバッファー
 
-SamplerState  g_samplerState : register(s0);                        // サンプラーステート
+SamplerState g_samplerState : register(s0); // サンプラーステート
 
 /////////////////////////////////////////////////////////////////
 // 関数宣言
@@ -45,6 +45,7 @@ float2 GetUV(BuiltInTriangleIntersectionAttributes attribs);
 void shadowChs(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes attribs)
 {
     // step-5 シャドウレイがポリゴンと衝突したときに衝突フラグを立てる
+    payload.hit = 1;
 }
 
 /////////////////////////////////////////////////////////////////
@@ -54,11 +55,12 @@ void shadowChs(inout RayPayload payload, in BuiltInTriangleIntersectionAttribute
 void shadowMiss(inout RayPayload payload)
 {
     // step-6 シャドウレイがどのポリゴンとも衝突しない場合はフラグを下ろす
+    payload.hit = 0;
 }
 
 /////////////////////////////////////////////////////////////////
 // レイと最も近い三角形ポリゴンと衝突したときに呼ばれるシェーダー
-/////////////////////////////////////////////////////////////////
+// ///////////////////////////////////////////////////////////////
 [shader("closesthit")]
 void chs(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes attribs)
 {
@@ -66,16 +68,56 @@ void chs(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes attr
     float2 uv = GetUV(attribs);
 
     // 求めたUV座標を使ってテクスチャカラーをサンプリングする
-    payload.color = g_albedoTexture.SampleLevel(g_samplerState,uv,0.0f);
+    payload.color = g_albedoTexture.SampleLevel(g_samplerState, uv, 0.0f);
 
     // step-2 レイとポリゴンの衝突点を求める
+    // 1. ぶつかったレイの方向ベクトルを取得
+    float3 rayDirW = WorldRayDirection();
+
+    // 2. レイを飛ばした座標を取得。今回であればカメラの視点
+    float3 rayOriginW = WorldRayOrigin();
+
+    // 3. レイを飛ばした場所から、衝突した点までの距離を取得
+    float hitT = RayTCurrent();
+
+    // 1. 2. 3. の情報から諸突した座標を求める
+    float3 hitPos = rayOriginW + rayDirW * hitT;
 
     // step-3 シャドウレイを作る
+    RayDesc ray;
+
+    // シャドウレイを飛ばす場所
+    ray.Origin = hitPos;
+
+    // ライトまでのベクトル。今回のハンズオンでは固定
+    ray.Direction = float3(0.5f, 0.5f, 0.2f);
+
+    // 正規化しておく
+    ray.Direction = normalize(ray.Direction);
+
+    // レイの最小距離と最大距離
+    ray.TMin = 0.01f;
+    ray.TMax = 100;
 
     // step-4 シャドウレイを飛ばす
+    payload.hit = 0;
+    TraceRay(
+        g_raytracingWorld, // レイトレワールド
+        0, //
+        0xFF,
+        1, // ヒットグループのオフセット番号
+        0,
+        1, // ミスシェーダーの番号
+        ray, // レイ
+        payload
+    );
 
     // step-7 衝突フラグを調べて影を落とす
-
+    if (payload.hit == 1)
+    {
+        // 衝突しているので色味を弱くする
+        payload.color *= 0.5f;
+    }
 }
 
 /////////////////////////////////////////////////////////////////
@@ -92,14 +134,14 @@ void miss(inout RayPayload payload)
 // 定数バッファーなので16バイトアライメントに気を付けること
 struct Camera
 {
-    float4x4 mCameraRot;    // カメラの回転行列
-    float3 pos;             // カメラ座標
-    float aspect;           // アスペクト比
-    float far;              // 遠平面
-    float near;             // 近平面
+    float4x4 mCameraRot; // カメラの回転行列
+    float3 pos; // カメラ座標
+    float aspect; // アスペクト比
+    float far; // 遠平面
+    float near; // 近平面
 };
 
-cbuffer rayGenCB :register(b0)
+cbuffer rayGenCB : register(b0)
 {
     Camera g_camera; // カメラ
 };

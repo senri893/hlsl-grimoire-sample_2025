@@ -1,0 +1,2 @@
+TKM Path,MeshIndex,MaterialIndex,Albedo,Normal,Specular,Reflection,Refraction
+"Assets/modelData/sample.tkm",0,0,"cone_D_BaseColor.png","cone_D_Normal.png","","",""
