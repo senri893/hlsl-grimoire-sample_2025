@@ -33,7 +33,7 @@ struct SPSOut
     float4 normal : SV_Target1; // 法線
 
     // step-4 RenderGBufferパスのピクセルシェーダーの出力に深度値を追加する
-
+    float depth : SV_Target2; // 深度値
 };
 
 // モデルテクスチャ
@@ -49,9 +49,9 @@ SPSIn VSMain(SVSIn vsIn, uniform bool hasSkin)
 {
     SPSIn psIn;
 
-    psIn.pos = mul(mWorld, vsIn.pos);   // モデルの頂点をワールド座標系に変換
-    psIn.pos = mul(mView, psIn.pos);    // ワールド座標系からカメラ座標系に変換
-    psIn.pos = mul(mProj, psIn.pos);    // カメラ座標系からスクリーン座標系に変換
+    psIn.pos = mul(mWorld, vsIn.pos); // モデルの頂点をワールド座標系に変換
+    psIn.pos = mul(mView, psIn.pos); // ワールド座標系からカメラ座標系に変換
+    psIn.pos = mul(mProj, psIn.pos); // カメラ座標系からスクリーン座標系に変換
     psIn.normal = normalize(mul(mWorld, vsIn.normal));
     psIn.uv = vsIn.uv;
 
@@ -65,16 +65,15 @@ SPSOut PSMain(SPSIn psIn)
 {
     // G-Bufferに出力
     SPSOut psOut;
-
     // アルベドカラーを出力
     psOut.albedo = g_texture.Sample(g_sampler, psIn.uv);
-
     // 法線を出力
     psOut.normal.xyz = psIn.normal;
 
     psOut.normal.w = 1.0f;
 
     // step-5 射影空間でのZ値を出力する
+    psOut.depth = psIn.pos.z;
 
     return psOut;
 }

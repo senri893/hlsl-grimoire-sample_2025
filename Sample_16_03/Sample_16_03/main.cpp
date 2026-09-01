@@ -6,8 +6,8 @@
 /////////////////////////////////////////////////////////////////
 // 定数
 /////////////////////////////////////////////////////////////////
-const int TILE_WIDTH = 16;      // タイルの幅
-const int TILE_HEIGHT = 16;     // タイルの高さ
+const int TILE_WIDTH = 16;  // タイルの幅
+const int TILE_HEIGHT = 16; // タイルの高さ
 const int NUM_TILE = (FRAME_BUFFER_W / TILE_WIDTH) * (FRAME_BUFFER_H / TILE_HEIGHT); // タイルの数
 
 /////////////////////////////////////////////////////////////////
@@ -47,12 +47,12 @@ const int NUM_DIRECTION_LIGHT = 4;  // ディレクションライトの数
 // ライト構造体
 struct Light
 {
-    DirectionalLight directionLights[ NUM_DIRECTION_LIGHT]; // ディレクションライト
-    PointLight pointLights[MAX_POINT_LIGHT];                // ポイントライト
-    Matrix mViewProjInv;                                    // ビュープロジェクション行列の逆行列
-    Vector3 eyePos;                                         // 視点
-    float specPow;                                          // スペキュラの絞り
-    int numPointLight;                                      // ポイントライトの数
+    DirectionalLight directionLights[NUM_DIRECTION_LIGHT]; // ディレクションライト
+    PointLight pointLights[MAX_POINT_LIGHT];    // ポイントライト
+    Matrix mViewProjInv;                        // ビュープロジェクション行列の逆行列
+    Vector3 eyePos;                             // 視点
+    float specPow;                              // スペキュラの絞り
+    int numPointLight;                          // ポイントライトの数
 };
 
 /////////////////////////////////////////////////////////////////
@@ -69,7 +69,7 @@ void InitPipelineState(RootSignature& rs, PipelineState& pipelineState, Shader& 
 void DefferedLighting(RenderContext& renderContext, Sprite& defferedSprite);
 
 ///////////////////////////////////////////////////////////////////
-// ウィンドウプログラムのメイン関数
+//  ウィンドウプログラムのメイン関数
 ///////////////////////////////////////////////////////////////////
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
 {
@@ -79,8 +79,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     InitStandardIOConsole();
 
     //////////////////////////////////////
-    // ここから初期化を行うコードを記述する
+    //  ここから初期化を行うコードを記述する
     //////////////////////////////////////
+
     g_camera3D->SetPosition({ 0.0f, 200.0, 400.0f });
     g_camera3D->Update();
 
@@ -101,21 +102,65 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     RenderTarget normalRT;
     RenderTarget depthRT;
     RenderTarget* gbuffers[] = {
-        &albedoRT,      // 0番目のレンダリングターゲット
-        &normalRT,      // 1番目のレンダリングターゲット
-        &depthRT        // 2番目のレンダリングターゲット
+        &albedoRT,  // 0番目のレンダリングターゲット
+        &normalRT,  // 1番目のレンダリングターゲット
+        &depthRT    // 2番目のレンダリングターゲット
     };
     InitGBuffers(albedoRT, normalRT, depthRT);
 
     // step-1 ライトカリング用のコンピュートシェーダーをロード
+    Shader csLightCulling;
+    csLightCulling.LoadCS("Assets/shader/lightCulling.fx", "CSMain");
 
     // step-2 ライトカリング用のパイプラインステートを初期化
+    PipelineState lightCullingPipelineState;
+    InitPipelineState(rootSignature, lightCullingPipelineState, csLightCulling);
 
     // step-3 タイルごとのポイントライトの番号のリストを出力するUAVを初期化
+    RWStructuredBuffer pointLightNoListInTileUAV;
+    // 第1引数は1要素のサイズ
+    // 1要素はポイントライトの番号なので4バイト
+    // 第2引数はバッファ全体のサイズ
+    // 1つのタイルにすべてのポイントライトが含まれる可能性があるので、
+    // 1つのタイルで番号を記憶できることが可能なサイズを確保する
+    pointLightNoListInTileUAV.Init(
+        sizeof(int),
+        MAX_POINT_LIGHT * NUM_TILE,
+        nullptr);
 
-    // step-4 ポイントライトの情報を送るための定数バッファを作成
+    // step-4 ポイントライトの情報を送るための定数バッファーを作成
+    // ライトカリングのカメラ用の定数バッファーを作成
+    LightCullingCameraData lightCullingCameraData;
+    lightCullingCameraData.mProj = g_camera3D->GetProjectionMatrix();
+    lightCullingCameraData.mProjInv.Inverse(g_camera3D->GetProjectionMatrix());
+    lightCullingCameraData.mCameraRot = g_camera3D->GetCameraRotation();
+    lightCullingCameraData.screenParam.x = g_camera3D->GetNear();
+    lightCullingCameraData.screenParam.y = g_camera3D->GetFar();
+    lightCullingCameraData.screenParam.z = FRAME_BUFFER_W;
+    lightCullingCameraData.screenParam.w = FRAME_BUFFER_H;
+    ConstantBuffer cameraParamCB;
+    cameraParamCB.Init(sizeof(lightCullingCameraData), &lightCullingCameraData);
+
+    // ライトカリングのライト用の定数バッファーを作成
+    ConstantBuffer lightCB;
+    lightCB.Init(sizeof(light), &light);
 
     // step-5 ライトカリング用のディスクリプタヒープを作成
+    DescriptorHeap lightCullingDescriptroHeap;
+    lightCullingDescriptroHeap.RegistShaderResource(0, depthRT.GetRenderTargetTexture());
+    lightCullingDescriptroHeap.RegistUnorderAccessResource(0, pointLightNoListInTileUAV);
+    lightCullingDescriptroHeap.RegistConstantBuffer(0, cameraParamCB);
+    lightCullingDescriptroHeap.RegistConstantBuffer(1, lightCB);
+    lightCullingDescriptroHeap.Commit();
+
+    // ポストエフェクト的にディファードライティングを行うためのスプライトを初期化
+    Sprite defferdLightingSpr;
+    InitDefferedLightingSprite(
+        defferdLightingSpr,
+        gbuffers,
+        ARRAYSIZE(gbuffers),
+        light,
+        pointLightNoListInTileUAV);
 
     //////////////////////////////////////
     // 初期化を行うコードを書くのはここまで！！！
@@ -123,15 +168,12 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     auto& renderContext = g_graphicsEngine->GetRenderContext();
 
     Stopwatch sw;
-
-    //  ここからゲームループ
+    // ここからゲームループ
     while (DispatchWindowMessage())
     {
         sw.Start();
-
         // レンダリング開始
         g_engine->BeginFrame();
-
         //////////////////////////////////////
         // ここから絵を描くコードを記述する
         //////////////////////////////////////
@@ -151,12 +193,23 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
         RenderGBuffer(renderContext, gbuffers, ARRAYSIZE(gbuffers), teapotModel, bgModel);
 
         // step-6 ライトカリングのコンピュートシェーダーをディスパッチ
+        renderContext.SetComputeRootSignature(rootSignature);
+        lightCB.CopyToVRAM(light);
+        renderContext.SetComputeDescriptorHeap(lightCullingDescriptroHeap);
+        renderContext.SetPipelineState(lightCullingPipelineState);
+
+        // グループの数はタイルの数
+        renderContext.Dispatch(
+            FRAME_BUFFER_W / TILE_WIDTH,
+            FRAME_BUFFER_H / TILE_HEIGHT,
+            1);
 
         // リソースバリア
         renderContext.TransitionResourceState(
             pointLightNoListInTileUAV.GetD3DResoruce(),
             D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+        );
 
         // ディファードライティング
         DefferedLighting(renderContext, defferdLightingSpr);
@@ -166,13 +219,13 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
             D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-        /////////////////////////////////////////
+        //////////////////////////////////////
         // 絵を描くコードを書くのはここまで！！！
         //////////////////////////////////////
         // レンダリング終了
         g_engine->EndFrame();
         sw.Stop();
-        printf("fps = %0.2f\n", 1.0f / sw.GetElapsed() );
+        printf("fps = %0.2f\n", 1.0f / sw.GetElapsed());
     }
 
     ::FreeConsole();
@@ -183,13 +236,13 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
 void InitRootSignature(RootSignature& rs)
 {
     rs.Init(D3D12_FILTER_MIN_MAG_MIP_LINEAR,
-            D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-            D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-            D3D12_TEXTURE_ADDRESS_MODE_WRAP);
+        D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+        D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+        D3D12_TEXTURE_ADDRESS_MODE_WRAP);
 }
 
 /// <summary>
-// / パイプラインステートの初期化
+/// パイプラインステートの初期化
 /// </summary>
 /// <param name="rs"></param>
 /// <param name="pipelineState"></param>
@@ -207,7 +260,7 @@ void InitPipelineState(RootSignature& rs, PipelineState& pipelineState, Shader& 
 }
 
 /// <summary>
-/// 標準入出力コンソールを初期化
+// / 標準入出力コンソールを初期化
 /// </summary>
 void InitStandardIOConsole()
 {
@@ -257,7 +310,7 @@ void InitLight(Light& light)
     {
         auto& pt = light.pointLights[i];
         pt.position.x = static_cast<float>(random() % 1000) - 500.0f;
-        pt.position.y = 20.0f; // 高さは20固定
+        pt.position.y = 20.0f;  // 高さは20固定
         pt.position.z = static_cast<float>(random() % 1000) - 500.0f;
         pt.positionInView = pt.position;
         mView.Apply(pt.positionInView);
@@ -360,7 +413,8 @@ void InitGBuffers(RenderTarget& albedoRT, RenderTarget& normalRT, RenderTarget& 
         1,
         1,
         DXGI_FORMAT_R32_FLOAT,
-        DXGI_FORMAT_UNKNOWN);
+        DXGI_FORMAT_UNKNOWN
+    );
 }
 
 /// <summary>
@@ -371,7 +425,7 @@ void InitGBuffers(RenderTarget& albedoRT, RenderTarget& normalRT, RenderTarget& 
 /// <param name="numGbuffer"></param>
 /// <param name="ladyModel"></param>
 /// <param name="bgModel"></param>
-void RenderGBuffer(RenderContext& renderContext, RenderTarget* gbuffers[], int numGbuffer, Model& teapotModel, Model& bgModel)
+void RenderGBuffer(RenderContext& renderContext, RenderTarget* gbuffers[], int numGbuffer, Model& ladyModel, Model& bgModel)
 {
     // まず、レンダリングターゲットとして設定できるようになるまで待つ
     renderContext.WaitUntilToPossibleSetRenderTargets(numGbuffer, gbuffers);
@@ -382,7 +436,7 @@ void RenderGBuffer(RenderContext& renderContext, RenderTarget* gbuffers[], int n
     // レンダリングターゲットをクリア
     renderContext.ClearRenderTargetViews(numGbuffer, gbuffers);
 
-    teapotModel.Draw(renderContext);
+    ladyModel.Draw(renderContext);
     bgModel.Draw(renderContext);
 
     // レンダリングターゲットへの書き込み待ち

@@ -192,6 +192,87 @@ void TraceReflectionRay(inout RayPayload raypayload, float3 normal)
     }
 }
 
+// 屈折レイを飛ばす
+void TraceRefractionRay(
+    inout RayPayload raypayload,
+    float3 normal,
+    float2 uv,
+    out float3 orientedNormal,
+    out float fresnel)
+{
+    orientedNormal = normalize(normal);
+    fresnel = 1.0f;
+
+    // 屈折は深さ制限を設ける
+    if(raypayload.depth < 3)
+    {
+        float hitT = RayTCurrent();
+        float3 rayDirW = normalize(WorldRayDirection());
+        float3 rayOriginW = WorldRayOrigin();
+
+        // 屈折率(マップから取得)
+        // ※ refractionMapには屈折率を格納する想定 (1.0~2.5程度の範囲)
+        float kRefractiveIndex = g_refractionMap.SampleLevel(s, uv, 0.0f).r;
+        // デフォルト値がゼロの場合はガラスの屈折率を使用
+        if(kRefractiveIndex < 1.0f)
+        {
+            kRefractiveIndex = 1.52f; // 例: ガラス
+        }
+
+        float etaI = 1.0f;
+        float etaT = kRefractiveIndex;
+
+        // 物体内部から外部へ出る場合は法線と屈折率を反転する
+        if(dot(rayDirW, orientedNormal) > 0.0f)
+        {
+            orientedNormal = -orientedNormal;
+
+            float temp = etaI;
+            etaI = etaT;
+            etaT = temp;
+        }
+
+        float eta = etaI / etaT;
+        float cosTheta = saturate(dot(-rayDirW, orientedNormal));
+
+        // Schlick近似によるFresnel反射率
+        float r0 = (etaI - etaT) / (etaI + etaT);
+        r0 *= r0;
+        fresnel = r0 + (1.0f - r0) * pow(1.0f - cosTheta, 5.0f);
+
+        // 屈折ベクトルを求める
+        float3 refrDir = refract(rayDirW, orientedNormal, eta);
+
+        // 屈折しない（全反射）の場合は反射率を1にする
+        if(dot(refrDir, refrDir) > 0.0001f)
+        {
+            // Find the world-space hit position
+            float3 posW = rayOriginW + hitT * rayDirW;
+
+            RayDesc ray;
+            ray.Origin = posW;
+            ray.Direction = refrDir;
+            ray.TMin = 0.01f;
+            ray.TMax = 10000;
+
+            TraceRay(
+                g_raytracingWorld,
+                0,
+                0xFF,
+                0,
+                0,
+                1,
+                ray,
+                raypayload
+            );
+        }
+        else
+        {
+            fresnel = 1.0f;
+        }
+    }
+}
+
 [shader("raygeneration")]
 void rayGen()
 {
@@ -283,14 +364,38 @@ void chs(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes attr
     refPayload.depth = payload.depth;
     refPayload.color = 0;
 
-    // 反射レイ
-    TraceReflectionRay(refPayload, normal);
+    // 屈折レイ
+    RayPayload refrPayload;
+    refrPayload.depth = payload.depth;
+    refrPayload.color = 0;
 
-    // このプリミティブの反射率を取得
+    float3 orientedNormal;
+    float fresnel;
+    TraceRefractionRay(refrPayload, normal, uv, orientedNormal, fresnel);
+
+    // 反射レイ
+    TraceReflectionRay(refPayload, orientedNormal);
+
+    // このプリミティブの反射率と屈折率を取得
     float reflectRate = g_reflectionMap.SampleLevel(s, uv, 0.0f).r;
+    float refractRate = g_refractionMap.SampleLevel(s, uv, 0.0f).r;
+	
+    // 仮の値をいれる
+    // const float reflectRate = 0.50f;
+	// const float refractRate = 1.52f;
+    
     float3 color = gAlbedoTexture.SampleLevel(s, uv, 0.0f).rgb;
-    color *= lig;
-    payload.color = lerp(color, refPayload.color, reflectRate);
+    // color *= lig;
+    const float kAlbedoStrength = 0.75f;
+    color *= lig * kAlbedoStrength;
+
+    // 反射と屈折を合成して最終カラーを決定する
+    float transmissionRate = (1.0f - fresnel) * refractRate;
+    float reflectionRate = 1.0f - transmissionRate;
+    float3 reflRefrCombined =
+        refPayload.color * reflectionRate +
+        refrPayload.color * transmissionRate;
+    payload.color = lerp(color, reflRefrCombined, reflectRate);
 
     payload.depth--;
 }

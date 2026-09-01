@@ -20,7 +20,7 @@ struct alignas(16) PointLight
 {
     Vector3 position;   // 座標
     float pad0;
-    Vector3 color;      //ライトのカラー
+    Vector3 color;      // ライトのカラー
     float range;        // ライトの影響を与える範囲
 };
 
@@ -30,7 +30,7 @@ const int NUM_DIRECTION_LIGHT = 4;  // ディレクションライトの数
 // ライト構造体
 struct Light
 {
-    DirectionalLight directionLights[ NUM_DIRECTION_LIGHT]; // ディレクションライト
+    DirectionalLight directionLights[NUM_DIRECTION_LIGHT]; // ディレクションライト
     PointLight pointLights[NUM_POINT_LIGHT];                // ポイントライト
     Matrix mViewProjInv;    // ビュープロジェクション行列の逆行列
     Vector3 eyePos;         // 視点
@@ -44,16 +44,18 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
 {
     // ゲームの初期化
     InitGame(hInstance, hPrevInstance, lpCmdLine, nCmdShow, TEXT("Game"));
+
     // 標準入出力コンソールの初期化
     InitStandardIOConsole();
 
     //////////////////////////////////////
-    //  ここから初期化を行うコードを記述する
+    // ここから初期化を行うコードを記述する
     //////////////////////////////////////
     std::random_device seed_gen;
     std::mt19937 random(seed_gen());
 
     g_camera3D->SetPosition({ 0.0f, 200.0, 400.0f });
+    g_camera3D->Update();
 
     // ルートシグネチャを作成
     RootSignature rootSignature;
@@ -103,9 +105,13 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
 
     // 背景のモデルを初期化
     ModelInitData bgModelInitData;
+
     // ユーザー拡張データとしてポイントライトのリストを渡す
     bgModelInitData.m_tkmFilePath = "Assets/modelData/bg.tkm";
     bgModelInitData.m_fxFilePath = "Assets/shader/renderGBuffer.fx";
+    bgModelInitData.m_colorBufferFormat[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+    bgModelInitData.m_colorBufferFormat[1] = DXGI_FORMAT_R16G16B16A16_FLOAT;
+    bgModelInitData.m_colorBufferFormat[2] = DXGI_FORMAT_R32_FLOAT;
     Model bgModel;
     bgModel.Init(bgModelInitData);
 
@@ -130,14 +136,22 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
         DXGI_FORMAT_R16G16B16A16_FLOAT,
         DXGI_FORMAT_UNKNOWN);
 
-    // step-1 射影空間でのZ値を出力するためのG-Bufferを作成
+    // step-1 射影空間でのZ値を出力するためのG-Bufferを作成する
+    RenderTarget depthRT;
+    depthRT.Create(
+        FRAME_BUFFER_W,
+        FRAME_BUFFER_H,
+        1,
+        1,
+        DXGI_FORMAT_R32_FLOAT,
+        DXGI_FORMAT_UNKNOWN);
 
-    RenderTarget* gbuffers[] = {
+    // レンダリングターゲットをG-Bufferに変更して書き込む
+    RenderTarget* rts[] = {
         &albedoRT,      // 0番目のレンダリングターゲット
         &normalRT,      // 1番目のレンダリングターゲット
-
-        // step-2 RenderGBufferのパスのレンダリングターゲットにdepthRTを追加
-
+        // step-2 RenderGBufferのパスのレンダリングターゲットにdepthRTを追加する
+        &depthRT		//2番目のレンダリングターゲット
     };
 
     // ポストエフェクト的にディファードライティングを行うためのスプライトを初期化
@@ -151,7 +165,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     spriteInitData.m_textures[0] = &albedoRT.GetRenderTargetTexture();
     spriteInitData.m_textures[1] = &normalRT.GetRenderTargetTexture();
 
-    // step-3 ディファードライティングで使用するテクスチャを追加
+    // step-3 ディファードライティングで使用するテクスチャを追加する
+    spriteInitData.m_textures[2] = &depthRT.GetRenderTargetTexture();
 
     spriteInitData.m_fxFilePath = "Assets/shader/defferedLighting.fx";
     spriteInitData.m_expandConstantBuffer = &light;
@@ -159,23 +174,39 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
 
     // 初期化データを使ってスプライトを作成
     Sprite defferdLightingSpr;
-    defferdLightingSpr.Init( spriteInitData);
+    defferdLightingSpr.Init(spriteInitData);
+
     //////////////////////////////////////
     // 初期化を行うコードを書くのはここまで！！！
     //////////////////////////////////////
     auto& renderContext = g_graphicsEngine->GetRenderContext();
 
+    Vector4 pos = { 20.0f, 10.0f, 30.0f, 1.0f };
+    Matrix mViewProj = g_camera3D->GetViewProjectionMatrix();
+    mViewProj.Apply(pos);
+    mViewProj.Inverse(mViewProj);
+    pos.x /= pos.w;
+    pos.y /= pos.w;
+    pos.z /= pos.w;
+    pos.w = 1.0f;
+    mViewProj.Apply(pos);
+    pos.x /= pos.w;
+    pos.y /= pos.w;
+    pos.z /= pos.w;
+
     Stopwatch sw;
-    // ここからゲームループ
+
+    //  ここからゲームループ
     while (DispatchWindowMessage())
     {
         sw.Start();
+
         // レンダリング開始
         g_engine->BeginFrame();
+
         //////////////////////////////////////
         // ここから絵を描くコードを記述する
         //////////////////////////////////////
-
         // ライトを回す
         Quaternion qRot;
         qRot.SetRotationDegY(1.0f);
@@ -185,28 +216,28 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
         }
 
         // まず、レンダリングターゲットとして設定できるようになるまで待つ
-        renderContext.WaitUntilToPossibleSetRenderTargets(ARRAYSIZE(gbuffers), gbuffers);
+        renderContext.WaitUntilToPossibleSetRenderTargets(ARRAYSIZE(rts), rts);
 
-        // レンダリングターゲットをG-Bufferに変更して書き込む
-        renderContext.SetRenderTargets(ARRAYSIZE(gbuffers), gbuffers);
+        // レンダリングターゲットを設定
+        renderContext.SetRenderTargets(ARRAYSIZE(rts), rts);
 
         // レンダリングターゲットをクリア
-        renderContext.ClearRenderTargetViews(ARRAYSIZE(gbuffers), gbuffers);
+        renderContext.ClearRenderTargetViews(ARRAYSIZE(rts), rts);
 
         teapotModel.Draw(renderContext);
         bgModel.Draw(renderContext);
 
         // レンダリングターゲットへの書き込み待ち
-        renderContext.WaitUntilFinishDrawingToRenderTargets(ARRAYSIZE(gbuffers), gbuffers);
+        renderContext.WaitUntilFinishDrawingToRenderTargets(ARRAYSIZE(rts), rts);
 
-        //レンダリング先をフレームバッファに戻してスプライトをレンダリングする
+        // レンダリング先をフレームバッファに戻してスプライトをレンダリングする
         g_graphicsEngine->ChangeRenderTargetToFrameBuffer(renderContext);
 
         // G-Bufferの内容を元にしてスプライトをレンダリング
         defferdLightingSpr.Draw(renderContext);
 
         /////////////////////////////////////////
-        // 絵を描くコードを書くのはここまで！！！
+        //絵を描くコードを書くのはここまで！！！
         //////////////////////////////////////
         // レンダリング終了
         g_engine->EndFrame();
@@ -222,13 +253,13 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
 void InitRootSignature(RootSignature& rs)
 {
     rs.Init(D3D12_FILTER_MIN_MAG_MIP_LINEAR,
-            D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-            D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-            D3D12_TEXTURE_ADDRESS_MODE_WRAP);
+        D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+        D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+        D3D12_TEXTURE_ADDRESS_MODE_WRAP);
 }
 
 /// <summary>
-/// 標準入出力コンソールを初期化
+// / 標準入出力コンソールを初期化
 /// </summary>
 void InitStandardIOConsole()
 {

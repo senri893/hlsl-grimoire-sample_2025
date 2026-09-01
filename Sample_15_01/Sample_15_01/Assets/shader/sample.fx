@@ -1,14 +1,15 @@
-//  平均点、最高得点、最低得点を計算するコンピュートシェーダー
+// 平均点、最高得点、最低得点を計算するコンピュートシェーダー
 #define NUM_STUDENT 3.0f // 生徒の数
 
 // 出力データ構造体
 struct OutputData
 {
     float averageScore; // 平均点
-    float maxScore;     // 最高点
-    float minScore;     // 最小点
-
+    float maxScore; // 最高点
+    float minScore; // 最小点
     // step-1 出力構造体にメンバーを追加する
+    int totalScore; // 合計点
+    float deviation; // 標準偏差
 };
 
 // 入力データにアクセスするための変数
@@ -25,7 +26,7 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
     g_outputData[0].minScore = 100;
 
     int totalScore = 0;
-    for(int i = 0; i < NUM_STUDENT; i++)
+    for (int i = 0; i < NUM_STUDENT; i++)
     {
         totalScore += g_scores[i];
         g_outputData[0].maxScore = max(g_outputData[0].maxScore, g_scores[i]);
@@ -34,4 +35,17 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
     g_outputData[0].averageScore = totalScore / NUM_STUDENT;
 
     // step-2 合計点を出力する
+    g_outputData[0].totalScore = totalScore;
+    float dev = 0.0f;
+    for (int i = 0; i < NUM_STUDENT; i++)
+    {
+        // 平均点からの差をtに記憶する
+        float t = g_scores[i] - g_outputData[0].averageScore;
+
+        // 平均点からの差のt^2の合計を求めていく
+        dev += t * t;
+    }
+
+    // 標準偏差を求める
+    g_outputData[0].deviation = sqrt(dev / NUM_STUDENT);
 }

@@ -1,7 +1,7 @@
 // closesthitシェーダー、missシェーダーに渡される引数構造体
 struct RayPayload
 {
-    float3 color;            // カラー
+    float3 color; // カラー
 };
 
 /////////////////////////////////////////////////////////////////
@@ -11,6 +11,11 @@ struct RayPayload
 void chs(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes attribs)
 {
     // step-4 レイと衝突した点の色を計算する
+    float3 barycentrics;
+    barycentrics.x = 1.0f - attribs.barycentrics.x - attribs.barycentrics.y;
+    barycentrics.y = attribs.barycentrics.x;
+    barycentrics.z = attribs.barycentrics.y;
+    payload.color = barycentrics;
 }
 
 /////////////////////////////////////////////////////////////////
@@ -20,26 +25,27 @@ void chs(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes attr
 void miss(inout RayPayload payload)
 {
     // step-5 レイがポリゴンが衝突しなかった時のカラーを計算する
+    payload.color = float3(1.0f, 0.0f, 0.0f);
 }
 
 // カメラ構造体
 // 定数バッファーなので16バイトアライメントに気を付けること
 struct Camera
 {
-    float4x4 mCameraRot;    // カメラの回転行列
-    float3 pos;             // カメラ座標
-    float aspect;           // アスペクト比
-    float far;              // 遠平面
-    float near;             // 近平面
+    float4x4 mCameraRot; // カメラの回転行列
+    float3 pos; // カメラ座標
+    float aspect; // アスペクト比
+    float far; // 遠平面
+    float near; // 近平面
 };
 
-cbuffer rayGenCB :register(b0)
+cbuffer rayGenCB : register(b0)
 {
     Camera g_camera; // カメラ
 };
 
-RaytracingAccelerationStructure g_raytracingWorld : register(t0);   // レイトレワールド
-RWTexture2D<float4> gOutput : register(u0);                         // カラー出力先
+RaytracingAccelerationStructure g_raytracingWorld : register(t0); // レイトレワールド
+RWTexture2D<float4> gOutput : register(u0); // カラー出力先
 
 [shader("raygeneration")]
 void rayGen()
@@ -62,11 +68,7 @@ void rayGen()
     ray.TMax = 10000;
 
     RayPayload payload;
-    TraceRay(g_raytracingWorld,
-        0 /*rayFlags*/,
-        0xFF,
-        0 /* ray index*/,
-        0, 0, ray, payload);
+    TraceRay(g_raytracingWorld, 0 /*rayFlags*/, 0xFF, 0 /* ray index*/, 0, 0, ray, payload);
 
     float3 col = payload.color;
 

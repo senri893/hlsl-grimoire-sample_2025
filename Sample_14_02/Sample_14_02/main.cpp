@@ -40,6 +40,19 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     modelInitData.m_expandShaderResoruceView[0] = &renderingEngine.GetMainRenderTargetSnapshotDrawnOpacity();
     myRenderer::ModelRender teapotModelRender;
 
+    //拡張定数バッファ用の構造体 (16バイトアライメント)
+    struct AlphaParam
+    {
+        float alpha;
+        float padding[3];
+    };
+    AlphaParam alphaParam;
+    alphaParam.alpha = 1.0f;
+
+    //拡張定数バッファを設定
+    modelInitData.m_expandConstantBuffer = &alphaParam;
+    modelInitData.m_expandConstantBufferSize = sizeof(AlphaParam);
+
     //フォワードレンダリングの描画パスで実行されるように初期化する
     teapotModelRender.InitForwardRendering(renderingEngine, modelInitData);
     teapotModelRender.SetShadowCasterFlag(true);
@@ -51,6 +64,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     //////////////////////////////////////
     auto& renderContext = g_graphicsEngine->GetRenderContext();
 
+    //ティーポットの回転角度を初期化
+    float teapotRotationAngle = 0.0f;
     // ここからゲームループ
     while (DispatchWindowMessage())
     {
@@ -60,6 +75,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         g_camera3D->MoveRight(g_pad[0]->GetLStickXF());
         g_camera3D->MoveUp(g_pad[0]->GetRStickYF());
 
+        
+
         //////////////////////////////////////
         // ここから絵を描くコードを記述する
         //////////////////////////////////////
@@ -68,6 +85,15 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
         // step-2 ティーポットモデルを描画
         teapotModelRender.Draw();
+
+        teapotRotationAngle += Math::PI / 120.0f;
+
+        //回転クォータニオンを作成
+        Quaternion rotY;
+
+        rotY.SetRotationY(teapotRotationAngle);
+
+        teapotModelRender.UpdateWorldMatrix({ 0.0f, 20.0f, 0.0f }, rotY,g_vec3One);
 
         //レンダリングパイプラインを実行
         renderingEngine.Execute(renderContext);
