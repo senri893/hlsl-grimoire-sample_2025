@@ -2,6 +2,7 @@
 #include "system/system.h"
 #include "RenderingEngine.h"
 #include "ModelRender.h"
+#include <chrono>
 
 // 関数宣言
 void InitRootSignature(RootSignature& rs);
@@ -47,7 +48,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         float padding[3];
     };
     AlphaParam alphaParam;
-    alphaParam.alpha = 1.0f;
+    // 初期状態は透明にする
+    alphaParam.alpha = 0.0f;
 
     //拡張定数バッファを設定
     modelInitData.m_expandConstantBuffer = &alphaParam;
@@ -66,6 +68,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
     //ティーポットの回転角度を初期化
     float teapotRotationAngle = 0.0f;
+    // 180度（PIラジアン）を回った回数を監視するためのインデックス
+    int previousHalfTurnIndex = 0;
     // ここからゲームループ
     while (DispatchWindowMessage())
     {
@@ -83,17 +87,32 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
         bgModelRender.Draw();
 
-        // step-2 ティーポットモデルを描画
-        teapotModelRender.Draw();
-
+        // ティーポットの回転を更新
         teapotRotationAngle += Math::PI / 120.0f;
+
+        // 180度(PI)ごとに切り替え判定
+        int currentHalfTurnIndex = static_cast<int>(teapotRotationAngle / Math::PI);
+        if (currentHalfTurnIndex != previousHalfTurnIndex)
+        {
+            // 透明(0.0)と半透明(0.5)をトグル
+            if (alphaParam.alpha < 0.25f)
+            {
+                alphaParam.alpha = 0.5f;
+            }
+            else
+            {
+                alphaParam.alpha = 0.0f;
+            }
+            previousHalfTurnIndex = currentHalfTurnIndex;
+        }
 
         //回転クォータニオンを作成
         Quaternion rotY;
-
         rotY.SetRotationY(teapotRotationAngle);
-
         teapotModelRender.UpdateWorldMatrix({ 0.0f, 20.0f, 0.0f }, rotY,g_vec3One);
+
+        // step-2 ティーポットモデルを描画
+        teapotModelRender.Draw();
 
         //レンダリングパイプラインを実行
         renderingEngine.Execute(renderContext);

@@ -112,7 +112,19 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     ModelInitData initData;
 
     initData.m_tkmFilePath = "Assets/modelData/sample.tkm";
+    // ここで透過率と屈折率用の拡張定数バッファを渡す。
+    // Sample.fx 側で同じレイアウトの定数バッファを参照します。
+    struct MaterialParams {
+        float opacity; // 0.0 = 完全透明, 1.0 = 不透明
+        float ior;     // 屈折率（未使用だが将来利用可能）
+        float pad[2];
+    };
+    static MaterialParams s_defaultMaterialParams = { 1.0f, 1.0f, {0.0f, 0.0f} };
+
+    // デフォルトのモデルは不透明。透過を確認したいモデルはここで値を変える。
     initData.m_fxFilePath = "Assets/shader/NoAnimModel_PBR.fx";
+    initData.m_expandConstantBuffer = &s_defaultMaterialParams;
+    initData.m_expandConstantBufferSize = sizeof(s_defaultMaterialParams);
 
     // materialのリストを出力
     std::string materialList = BuildTkmMaterialList(initData.m_tkmFilePath);
@@ -132,6 +144,14 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     }
 
     model.Init(initData);
+
+    // sample.tkm のモデルを透過状態にするサンプル: s_defaultMaterialParams を変更して
+    // 透過を有効にする（開発中はここで値を変更して動作確認を行ってください）。
+    // 例: 透過にする
+    // s_defaultMaterialParams.opacity = 0.5f;
+    // model は既に初期化済みなので、m_expandConstantBuffer を利用する場合は
+    // Model 側で再設定が必要なケースがあります。簡便のため、ここでは初期化時に
+    // 渡すパターンを使っています。
 
     initData.m_tkmFilePath = "Assets/modelData/bg/bg.tkm";
     bgModel.Init(initData);
