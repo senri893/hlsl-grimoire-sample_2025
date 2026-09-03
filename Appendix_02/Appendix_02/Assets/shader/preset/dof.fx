@@ -34,6 +34,8 @@ PSInput VSMain(VSInput In)
 //step-11 ボケ画像と深度テクスチャにアクセスするための変数を追加。
 Texture2D<float4> bokeTexture : register(t0);  // ボケ画像
 Texture2D<float4> depthTexture : register(t1); // 深度テクスチャ
+// マッピングデータ（透過率マップ）を追加。このテクスチャの値で出力の透明度を変化させる。
+Texture2D<float> opacityMap : register(t2); // 透過率マップ（0..1）
 
 sampler Sampler : register(s0);
 
@@ -55,6 +57,9 @@ float4 PSMain(PSInput In) : SV_Target0
     // 深度値200からボケが始まり、深度値500で最大のボケ具合になる。
     //  -> つまり、深度値500で不透明度が1になる。
     boke.a = min( 1.0f, ( depth - 500.0f ) / 1000.0f );
+    // マッピングデータに応じて透過率を変化させる。
+    float mapVal = opacityMap.Sample( Sampler, In.uv );
+    boke.a *= mapVal;
     // ボケ画像を出力。
     return boke;
 }

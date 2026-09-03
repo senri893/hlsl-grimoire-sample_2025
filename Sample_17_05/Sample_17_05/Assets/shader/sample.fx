@@ -43,34 +43,34 @@ struct SVertex
 // 定数バッファーなので16バイトアライメントに気を付けること
 struct Camera
 {
-    float4x4 mCameraRot;    // カメラの回転行列
-    float3 pos;             // カメラ座標
-    float aspect;           // アスペクト比
-    float far;              // 遠平面
-    float near;             // 近平面
+    float4x4 mCameraRot; // カメラの回転行列
+    float3 pos; // カメラ座標
+    float aspect; // アスペクト比
+    float far; // 遠平面
+    float near; // 近平面
 };
 
-cbuffer rayGenCB :register(b0)
+cbuffer rayGenCB : register(b0)
 {
     Camera g_camera; // カメラ
 };
 
-RaytracingAccelerationStructure g_raytracingWorld : register(t0);    // レイトレワールド
-Texture2D<float4> gAlbedoTexture : register(t1);    // アルベドマップ
-Texture2D<float4> g_normalMap : register(t2);       // 法線マップ
-Texture2D<float4> g_specularMap : register(t3);     // スペキュラマップ
-Texture2D<float4> g_reflectionMap : register(t4);   // リフレクションマップ
-Texture2D<float4> g_refractionMap : register(t5);   // 屈折マップ
-StructuredBuffer<SVertex> g_vertexBuffers : register(t6);   // 頂点バッファー
-StructuredBuffer<int> g_indexBuffers : register(t7);        // インデックスバッファー
+RaytracingAccelerationStructure g_raytracingWorld : register(t0); // レイトレワールド
+Texture2D<float4> gAlbedoTexture : register(t1); // アルベドマップ
+Texture2D<float4> g_normalMap : register(t2); // 法線マップ
+Texture2D<float4> g_specularMap : register(t3); // スペキュラマップ
+Texture2D<float4> g_reflectionMap : register(t4); // リフレクションマップ
+Texture2D<float4> g_refractionMap : register(t5); // 屈折マップ
+StructuredBuffer<SVertex> g_vertexBuffers : register(t6); // 頂点バッファー
+StructuredBuffer<int> g_indexBuffers : register(t7); // インデックスバッファー
 
 RWTexture2D<float4> gOutput : register(u0);
 
-SamplerState  s : register(s0);
+SamplerState s : register(s0);
 
 struct RayPayload
 {
-    float3 color;               // カラー
+    float3 color; // カラー
     int hit;
     int depth;
 };
@@ -122,7 +122,7 @@ float3 GetNormal(BuiltInTriangleIntersectionAttributes attribs, float2 uv)
 
     float3 binormal = normalize(cross(tangent, normal));
 
-    float3 binSpaceNormal = g_normalMap.SampleLevel (s, uv, 0.0f).xyz;
+    float3 binSpaceNormal = g_normalMap.SampleLevel(s, uv, 0.0f).xyz;
     binSpaceNormal = (binSpaceNormal * 2.0f) - 1.0f;
 
     normal = tangent * binSpaceNormal.x + binormal * binSpaceNormal.y + normal * binSpaceNormal.z;
@@ -161,7 +161,7 @@ void TraceLightRay(inout RayPayload raypayload, float3 normal)
 // 反射レイを飛ばす
 void TraceReflectionRay(inout RayPayload raypayload, float3 normal)
 {
-    if(raypayload.depth < 3)
+    if (raypayload.depth < 3)
     {
         float hitT = RayTCurrent();
         float3 rayDirW = WorldRayDirection();
@@ -204,7 +204,7 @@ void TraceRefractionRay(
     fresnel = 1.0f;
 
     // 屈折は深さ制限を設ける
-    if(raypayload.depth < 3)
+    if (raypayload.depth < 3)
     {
         float hitT = RayTCurrent();
         float3 rayDirW = normalize(WorldRayDirection());
@@ -214,7 +214,7 @@ void TraceRefractionRay(
         // ※ refractionMapには屈折率を格納する想定 (1.0~2.5程度の範囲)
         float kRefractiveIndex = g_refractionMap.SampleLevel(s, uv, 0.0f).r;
         // デフォルト値がゼロの場合はガラスの屈折率を使用
-        if(kRefractiveIndex < 1.0f)
+        if (kRefractiveIndex < 1.0f)
         {
             kRefractiveIndex = 1.52f; // 例: ガラス
         }
@@ -223,7 +223,7 @@ void TraceRefractionRay(
         float etaT = kRefractiveIndex;
 
         // 物体内部から外部へ出る場合は法線と屈折率を反転する
-        if(dot(rayDirW, orientedNormal) > 0.0f)
+        if (dot(rayDirW, orientedNormal) > 0.0f)
         {
             orientedNormal = -orientedNormal;
 
@@ -244,7 +244,7 @@ void TraceRefractionRay(
         float3 refrDir = refract(rayDirW, orientedNormal, eta);
 
         // 屈折しない（全反射）の場合は反射率を1にする
-        if(dot(refrDir, refrDir) > 0.0001f)
+        if (dot(refrDir, refrDir) > 0.0001f)
         {
             // Find the world-space hit position
             float3 posW = rayOriginW + hitT * rayDirW;
@@ -351,9 +351,9 @@ void chs(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes attr
     // 光源にむかってレイを飛ばす
     TraceLightRay(payload, normal);
     float lig = 0.0f;
-    if(payload.hit == 0)
+    if (payload.hit == 0)
     {
-        float3 ligDir =  normalize(float3(0.5, 0.5, 0.2));
+        float3 ligDir = normalize(float3(0.5, 0.5, 0.2));
         float t = max(0.0f, dot(ligDir, normal));
         lig = t;
     }
@@ -409,5 +409,5 @@ void shadowChs(inout RayPayload payload, in BuiltInTriangleIntersectionAttribute
 [shader("miss")]
 void shadowMiss(inout RayPayload payload)
 {
-   payload.hit = 0;
+    payload.hit = 0;
 }
